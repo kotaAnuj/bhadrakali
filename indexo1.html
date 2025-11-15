@@ -1,0 +1,2404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Water Distribution Management Pro</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    :root{
+      --bg:#f7f9fc;
+      --panel:#ffffff;
+      --text:#1f2a3a;
+      --muted:#5b6b7e;
+      --primary:#1e88e5;
+      --success:#2e7d32;
+      --danger:#c62828;
+      --accent:#6a1b9a;
+      --line:#cfd8dc;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;margin:0}
+    body{font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;color:var(--text);background:var(--bg);overflow:hidden}
+
+    #map{position:absolute;inset:0;z-index:0}
+    #canvas{position:absolute;inset:0;z-index:10;pointer-events:none}
+    #canvas.active{pointer-events:auto}
+    #canvas.drawing{cursor:crosshair}
+
+    .toolbar{position:absolute;top:16px;left:16px;width:56px;display:flex;flex-direction:column;gap:10px;z-index:1000}
+    .tool-btn{
+      width:56px;height:56px;border:none;background:var(--panel);color:var(--text);border-radius:12px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.08);display:flex;align-items:center;justify-content:center;font-size:20px;
+      cursor:pointer;transition:all .2s ease;
+    }
+    .tool-btn:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,0.12)}
+    .tool-btn.active{background:var(--primary);color:#fff;box-shadow:0 8px 24px rgba(30,136,229,0.3)}
+    .tool-btn:disabled{opacity:.45;cursor:not-allowed}
+
+    .search{position:absolute;top:16px;left:86px;width:min(600px, 65vw);z-index:1000;display:flex;flex-direction:column;gap:6px}
+    .search-bar{
+      background:var(--panel);display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.08);border:1px solid var(--line);transition:box-shadow .2s;
+    }
+    .search-bar:focus-within{box-shadow:0 8px 24px rgba(0,0,0,0.12);border-color:var(--primary)}
+    .search-bar input{flex:1;border:none;outline:none;font-size:14px;color:var(--text);background:transparent}
+    .search-bar .icon-btn{
+      width:36px;height:36px;border:none;background:#eef4ff;color:var(--primary);
+      border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;
+    }
+    .search-bar .icon-btn:hover{background:#d7e5ff}
+    .suggestions{position:relative}
+    .suggest-list{
+      position:absolute;top:0;left:0;right:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+      box-shadow:0 12px 28px rgba(0,0,0,0.12);overflow:hidden;max-height:420px;overflow-y:auto
+    }
+    .suggest-item{
+      padding:12px 14px;cursor:pointer;font-size:13px;color:var(--text);
+      border-bottom:1px solid #f2f4f7;display:flex;align-items:center;gap:10px;transition:background .15s;
+    }
+    .suggest-item:last-child{border-bottom:none}
+    .suggest-item:hover{background:#f4f8ff}
+    .suggest-item.header{font-weight:700;cursor:default;background:#fafbfc;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+    .suggest-item.header:hover{background:#fafbfc}
+    .suggest-item .match-score{font-size:10px;color:#1e88e5;background:#eef4ff;padding:2px 6px;border-radius:4px;margin-left:auto}
+
+    .sidebar{
+      position:absolute;top:0;right:0;width:460px;max-width:90vw;height:100%;background:var(--panel);
+      border-left:1px solid var(--line);box-shadow:-18px 0 36px rgba(0,0,0,0.08);
+      transform:translateX(100%);transition:transform .3s cubic-bezier(0.4, 0, 0.2, 1);z-index:900;
+      display:flex;flex-direction:column;
+    }
+    .sidebar.open{transform:translateX(0)}
+    .sidebar-header{
+      padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;
+      justify-content:space-between;background:#fafbfc;
+    }
+    .sidebar-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px;color:var(--text)}
+    .sidebar-body{padding:16px;overflow-y:auto;flex:1}
+    .card{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+    .card h4{margin:0 0 12px 0;font-size:13px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:0.3px}
+    .row{display:flex;justify-content:space-between;padding:8px 0;border-top:1px dashed #eef2f5;font-size:13px;align-items:center}
+    .row:first-child{border-top:none}
+    .label{color:var(--muted);font-weight:500}
+    .value{color:var(--text);font-weight:600}
+    .live-indicator{display:inline-block;width:8px;height:8px;background:#4caf50;border-radius:50%;margin-right:6px;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+    .btn{
+      width:100%;padding:11px 14px;border-radius:10px;border:1px solid var(--line);
+      background:#f7fafc;color:var(--text);cursor:pointer;display:flex;align-items:center;
+      justify-content:center;gap:8px;font-size:13px;font-weight:600;margin-top:8px;
+      transition:all .2s;
+    }
+    .btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+    .btn.primary{background:#eef4ff;color:var(--primary);border-color:#d7e5ff}
+    .btn.primary:hover{background:#d7e5ff}
+    .btn.success{background:#e9f7ee;color:var(--success);border-color:#cfe9d6}
+    .btn.success:hover{background:#cfe9d6}
+    .btn.danger{background:#fdeaea;color:var(--danger);border-color:#f7cccc}
+    .btn.danger:hover{background:#f7cccc}
+
+    .modal{
+      position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+      z-index:2000;background:rgba(18,22,28,.35);backdrop-filter:blur(2px);
+    }
+    .modal.active{display:flex}
+    .modal-content{
+      width:min(720px, 95vw);max-height:85vh;background:#fff;border:1px solid var(--line);
+      border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden;
+      animation:modalIn .3s cubic-bezier(0.4, 0, 0.2, 1);display:flex;flex-direction:column;
+    }
+    @keyframes modalIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+    .modal-header{
+      padding:16px 18px;border-bottom:1px solid var(--line);display:flex;
+      justify-content:space-between;align-items:center;background:#fafbfc;flex-shrink:0;
+    }
+    .modal-header h3{margin:0;font-size:16px;font-weight:700}
+    .close-x{
+      border:none;background:#f5f7fa;width:32px;height:32px;border-radius:8px;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;
+    }
+    .close-x:hover{background:#e8ecf0}
+    .modal-body{padding:18px;overflow-y:auto;flex:1}
+    .form-row{margin-bottom:12px}
+    .form-row label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600}
+    .form-row input,.form-row select,.form-row textarea{
+      width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
+      font-size:13px;color:var(--text);background:#fff;outline:none;transition:all .2s;font-family:inherit;
+    }
+    .form-row textarea{min-height:60px;resize:vertical}
+    .form-row input:focus,.form-row select:focus,.form-row textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(30,136,229,0.1)}
+    .form-row .error{font-size:11px;color:var(--danger);margin-top:4px}
+    .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+
+    .toast{
+      position:fixed;top:20px;right:20px;z-index:3000;background:#fff;border:1px solid var(--line);
+      color:var(--text);padding:12px 16px;border-radius:10px;
+      box-shadow:0 12px 24px rgba(0,0,0,.15);font-size:13px;font-weight:600;
+      display:none;animation:toastIn .3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes toastIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+
+    .zoom{position:absolute;bottom:20px;left:20px;display:flex;flex-direction:column;gap:8px;z-index:1000}
+    .zoom .tool-btn{width:44px;height:44px;border-radius:10px;font-size:18px}
+
+    .manage-list{display:flex;flex-direction:column;gap:10px}
+    .manage-item{
+      border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff;
+      display:flex;justify-content:space-between;align-items:center;gap:12px;
+    }
+    .manage-item-info{min-width:0;flex:1}
+    .manage-item-title{font-weight:700;color:var(--text);margin-bottom:4px}
+    .manage-item-meta{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .manage-item-actions{display:flex;gap:6px;flex-shrink:0}
+    .manage-item-actions .btn{margin:0;width:auto;padding:8px 12px;font-size:12px}
+
+    .tab-buttons{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:16px}
+    .tab-buttons .btn{margin:0}
+
+    .history-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
+    .history-table th{background:#fafbfc;padding:10px 8px;text-align:left;font-weight:600;border-bottom:2px solid var(--line);position:sticky;top:0}
+    .history-table td{padding:8px;border-bottom:1px solid #f2f4f7}
+    .history-table tr:hover{background:#f8fafb}
+
+    .filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+    .filter-bar input,.filter-bar select{flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px}
+
+    .layer-control{position:absolute;top:16px;right:420px;z-index:1000}
+    .layer-btn{
+      background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;
+      cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.08);
+      display:flex;align-items:center;gap:8px;transition:all .2s;
+    }
+    .layer-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,0.12)}
+    .layer-menu{
+      position:absolute;top:100%;right:0;margin-top:8px;background:var(--panel);border:1px solid var(--line);
+      border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,0.12);display:none;min-width:200px;
+    }
+    .layer-menu.active{display:block}
+    .layer-option{padding:12px 14px;cursor:pointer;border-bottom:1px solid #f2f4f7;display:flex;align-items:center;gap:10px;font-size:13px;transition:background .15s}
+    .layer-option:last-child{border-bottom:none}
+    .layer-option:hover{background:#f4f8ff}
+    .layer-option.selected{background:#eef4ff;color:var(--primary);font-weight:600}
+
+    .pipeline-segment-hover{cursor:pointer;opacity:0.7}
+    .pipeline-segment-hover:hover{opacity:1}
+
+    .advanced-search{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+    .advanced-search .form-row{margin:0}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <canvas id="canvas"></canvas>
+
+  <div class="toolbar">
+    <button id="toolPipeline" class="tool-btn active" title="Draw pipeline"><i class="fas fa-drafting-compass"></i></button>
+    <button id="toolTank" class="tool-btn" title="Add tank"><i class="fas fa-database"></i></button>
+    <button id="toolValve" class="tool-btn" title="Add valve"><i class="fas fa-cog"></i></button>
+    <button id="toolErase" class="tool-btn" title="Erase pipeline segment"><i class="fas fa-eraser"></i></button>
+    <button id="toolManage" class="tool-btn" title="Manage"><i class="fas fa-list"></i></button>
+    <button id="toolImport" class="tool-btn" title="Import data"><i class="fas fa-upload"></i></button>
+    <button id="toolClear" class="tool-btn" title="Clear all"><i class="fas fa-trash"></i></button>
+  </div>
+
+  <div class="search">
+    <div class="search-bar">
+      <i class="fas fa-magnifying-glass" style="color:var(--muted)"></i>
+      <input id="searchInput" type="text" placeholder="Search devices, places, or areas..." autocomplete="off"/>
+      <button id="searchBtn" class="icon-btn" title="Search"><i class="fas fa-arrow-right"></i></button>
+    </div>
+    <div class="suggestions" id="suggestions" style="display:none;">
+      <div class="suggest-list" id="suggestList"></div>
+    </div>
+  </div>
+
+  <div class="layer-control">
+    <button class="layer-btn" id="layerBtn">
+      <i class="fas fa-layer-group"></i>
+      <span id="layerName">Street Map</span>
+      <i class="fas fa-chevron-down"></i>
+    </button>
+    <div class="layer-menu" id="layerMenu">
+      <div class="layer-option selected" data-layer="street">
+        <i class="fas fa-map"></i> Street Map
+      </div>
+      <div class="layer-option" data-layer="satellite">
+        <i class="fas fa-satellite"></i> Satellite View
+      </div>
+      <div class="layer-option" data-layer="dark">
+        <i class="fas fa-moon"></i> Dark Mode
+      </div>
+    </div>
+  </div>
+
+  <div class="zoom">
+    <button id="zoomIn" class="tool-btn" title="Zoom in"><i class="fas fa-plus"></i></button>
+    <button id="zoomOut" class="tool-btn" title="Zoom out"><i class="fas fa-minus"></i></button>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title" id="sidebarTitle"><i class="fas fa-info-circle"></i> Details</div>
+      <button class="close-x" id="closeSidebar" title="Close"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="sidebar-body" id="sidebarBody"></div>
+  </div>
+
+  <div class="modal" id="tankModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="tankModalTitle">Add Tank</h3>
+        <button class="close-x" data-close="tankModal"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Device ID * (Unique identifier)</label>
+          <input id="tankId" placeholder="TANK-001" maxlength="50"/>
+          <div class="error" id="tankIdError"></div>
+        </div>
+        <div class="form-row"><label>Name *</label><input id="tankName" placeholder="OHSR Tank 1"/></div>
+        <div class="form-row">
+          <label>Type *</label>
+          <select id="tankType">
+            <option value="OHSR">OHSR (Overhead Storage Reservoir)</option>
+            <option value="GSR">GSR (Ground Storage Reservoir)</option>
+            <option value="ESR">ESR (Elevated Storage Reservoir)</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Capacity (L) *</label><input id="tankCapacity" type="number" placeholder="20000"/></div>
+        <div class="form-row"><label>State</label><input id="tankState" placeholder="Telangana"/></div>
+        <div class="form-row"><label>District</label><input id="tankDistrict" placeholder="Mulugu"/></div>
+        <div class="form-row"><label>Mandal</label><input id="tankMandal" placeholder="Eturunagaram"/></div>
+        <div class="form-row"><label>Habitation</label><input id="tankHabitation" placeholder="Ellishettypalle"/></div>
+        <div class="form-row"><label>Latitude *</label><input id="tankLat" type="number" step="0.000001" placeholder="Right-click map"/></div>
+        <div class="form-row"><label>Longitude *</label><input id="tankLng" type="number" step="0.000001" placeholder="Right-click map"/></div>
+        <div class="modal-actions">
+          <button class="btn primary" id="saveTank"><i class="fas fa-save"></i> Save</button>
+          <button class="btn" data-close="tankModal"><i class="fas fa-times"></i> Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="valveModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="valveModalTitle">Add Valve</h3>
+        <button class="close-x" data-close="valveModal"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Device ID * (Unique identifier)</label>
+          <input id="valveId" placeholder="VALVE-001" maxlength="50"/>
+          <div class="error" id="valveIdError"></div>
+        </div>
+        <div class="form-row"><label>Name *</label><input id="valveName" placeholder="Gate Valve 1"/></div>
+        <div class="form-row">
+          <label>Type *</label>
+          <select id="valveType">
+            <option value="STRAIGHT">STRAIGHT</option>
+            <option value="T-JUNCTION">T-JUNCTION</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Mandal</label><input id="valveMandal" placeholder="Eturunagaram"/></div>
+        <div class="form-row"><label>Habitation</label><input id="valveHabitation" placeholder="Ellishettypalle"/></div>
+        <div class="form-row"><label>Latitude *</label><input id="valveLat" type="number" step="0.000001" placeholder="Right-click map"/></div>
+        <div class="form-row"><label>Longitude *</label><input id="valveLng" type="number" step="0.000001" placeholder="Right-click map"/></div>
+        <div class="modal-actions">
+          <button class="btn primary" id="saveValve"><i class="fas fa-save"></i> Save</button>
+          <button class="btn" data-close="valveModal"><i class="fas fa-times"></i> Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="pipelineModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Pipeline Details</h3>
+        <button class="close-x" data-close="pipelineModal"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row"><label>Pipeline Name *</label><input id="pipelineName" placeholder="Main Supply Line A"/></div>
+        <div class="form-row">
+          <label>Pipeline Type *</label>
+          <select id="pipelineType">
+            <option value="PVC">PVC</option>
+            <option value="HDPE">HDPE</option>
+            <option value="GI">GI (Galvanized Iron)</option>
+            <option value="DI">DI (Ductile Iron)</option>
+            <option value="MS">MS (Mild Steel)</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Diameter (mm) *</label><input id="pipelineDiameter" type="number" placeholder="150"/></div>
+        <div class="form-row"><label>Max Flow Capacity (L/min) *</label><input id="pipelineCapacity" type="number" placeholder="500"/></div>
+        <div class="form-row"><label>Start Point Name</label><input id="pipelineStart" placeholder="Main Tank"/></div>
+        <div class="form-row"><label>End Point Name</label><input id="pipelineEnd" placeholder="Distribution Point A"/></div>
+        <div class="form-row"><label>Notes</label><textarea id="pipelineNotes" placeholder="Additional information..."></textarea></div>
+        <div class="modal-actions">
+          <button class="btn primary" id="savePipeline"><i class="fas fa-save"></i> Save</button>
+          <button class="btn" data-close="pipelineModal"><i class="fas fa-times"></i> Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="manageModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Manage System</h3>
+        <button class="close-x" data-close="manageModal"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="tab-buttons">
+          <button class="btn primary" data-tab="tanks"><i class="fas fa-database"></i> Tanks</button>
+          <button class="btn" data-tab="valves"><i class="fas fa-cog"></i> Valves</button>
+          <button class="btn" data-tab="pipelines"><i class="fas fa-route"></i> Pipelines</button>
+          <button class="btn" data-tab="search"><i class="fas fa-search"></i> Search</button>
+          <button class="btn" data-tab="data"><i class="fas fa-file-export"></i> Data</button>
+        </div>
+        <div id="manageContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="historyModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="historyModalTitle">Device History</h3>
+        <button class="close-x" data-close="historyModal"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="filter-bar">
+          <input type="datetime-local" id="historyStartDate" placeholder="Start date"/>
+          <input type="datetime-local" id="historyEndDate" placeholder="End date"/>
+          <button class="btn primary" style="margin:0;width:auto" id="filterHistory"><i class="fas fa-filter"></i> Filter</button>
+          <button class="btn success" style="margin:0;width:auto" id="exportHistoryCsv"><i class="fas fa-download"></i> Export CSV</button>
+        </div>
+        <div id="historyContent" style="max-height:400px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <input id="importFile" type="file" accept=".json" style="display:none"/>
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script>
+    // ==================== DATA MODELS ====================
+    class Tank {
+      constructor(data){
+        this.id = data.id;
+        this.name = data.name || 'Tank';
+        this.lat = parseFloat(data.lat);
+        this.lng = parseFloat(data.lng);
+        this.type = data.type || 'OHSR';
+        this.capacity = parseFloat(data.capacity) || 20000;
+        this.state = data.state || 'Telangana';
+        this.district = data.district || 'Mulugu';
+        this.mandal = data.mandal || 'Eturunagaram';
+        this.habitation = data.habitation || 'Ellishettypalle';
+        this.status = data.status || 'active';
+        this.history = data.history || [];
+        this.lastUpdate = data.lastUpdate || Date.now();
+        this.generateLiveData();
+      }
+      
+      generateLiveData(){
+        this.waterLevel = (Math.random()*5+5).toFixed(2);
+        this.pressure = (Math.random()*10+25).toFixed(1);
+        this.flowRate = (Math.random()*30+50).toFixed(1);
+        this.pH = (Math.random()*1+6.5).toFixed(2);
+        this.temperature = (Math.random()*5+20).toFixed(0);
+        this.lastUpdate = Date.now();
+      }
+      
+      recordHistory(){
+        const record = {
+          timestamp: Date.now(),
+          waterLevel: this.waterLevel,
+          pressure: this.pressure,
+          flowRate: this.flowRate,
+          pH: this.pH,
+          temperature: this.temperature,
+          status: this.status
+        };
+        this.history.push(record);
+        if(this.history.length > 2000) this.history.shift();
+      }
+      
+      update(data){ Object.assign(this, data); }
+      
+      info(){
+        return {
+          id:this.id, name:this.name, type:this.type, capacity:`${this.capacity} L`,
+          waterLevel:`${this.waterLevel} m`, pressure:`${this.pressure} PSI`, flowRate:`${this.flowRate} L/min`,
+          pH:this.pH, temperature:`${this.temperature}°C`, status:this.status,
+          loc:{ state:this.state, district:this.district, mandal:this.mandal, habitation:this.habitation,
+                coords:`${this.lat.toFixed(6)}, ${this.lng.toFixed(6)}` }
+        }
+      }
+    }
+
+    class Valve {
+      constructor(data){
+        this.id = data.id;
+        this.name = data.name || 'Valve';
+        this.lat = parseFloat(data.lat);
+        this.lng = parseFloat(data.lng);
+        this.type = data.type || 'STRAIGHT';
+        this.flowDirection = data.flowDirection || 'straight';
+        this.valveState = data.valveState || 'open';
+        this.active = data.active || false;
+        this.status = data.status || 'active';
+        this.mandal = data.mandal || 'Eturunagaram';
+        this.habitation = data.habitation || 'Ellishettypalle';
+        this.history = data.history || [];
+        this.lastUpdate = data.lastUpdate || Date.now();
+        this.generateLiveData();
+      }
+      
+      generateLiveData(){
+        this.battery = (Math.random()*30+70).toFixed(0);
+        this.pressure = (Math.random()*10+15).toFixed(1);
+        this.lastUpdate = Date.now();
+      }
+      
+      recordHistory(){
+        const record = {
+          timestamp: Date.now(),
+          battery: this.battery,
+          pressure: this.pressure,
+          valveState: this.valveState,
+          active: this.active,
+          status: this.status
+        };
+        this.history.push(record);
+        if(this.history.length > 2000) this.history.shift();
+      }
+      
+      toggle(){ 
+        this.active = !this.active; 
+        this.valveState = this.active ? 'closed' : 'open';
+        this.recordHistory();
+      }
+      
+      update(data){ Object.assign(this, data); }
+      
+      info(){
+        return {
+          id:this.id, name:this.name, type:this.type, flowDirection:this.flowDirection,
+          valveState:this.valveState, battery:`${this.battery}%`, pressure:`${this.pressure} PSI`, status:this.status,
+          loc:{ mandal:this.mandal, habitation:this.habitation, coords:`${this.lat.toFixed(6)}, ${this.lng.toFixed(6)}` }
+        }
+      }
+    }
+
+    class Pipeline {
+      constructor(data){
+        this.id = data.id || `pipe_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+        this.name = data.name || `Pipeline ${Date.now()}`;
+        this.type = data.type || 'PVC';
+        this.diameter = parseFloat(data.diameter) || 150;
+        this.capacity = parseFloat(data.capacity) || 500;
+        this.startPoint = data.startPoint || '';
+        this.endPoint = data.endPoint || '';
+        this.notes = data.notes || '';
+        this.points = data.points || [];
+        this.currentFlow = 0;
+        this.active = data.active !== undefined ? data.active : true;
+      }
+      
+      update(data){ Object.assign(this, data); }
+    }
+
+    // ==================== STORAGE ====================
+    const DataStore = {
+      save(){ 
+        try{
+          const data = JSON.stringify({ 
+            tanks: tanks.map(t => ({...t})), 
+            valves: valves.map(v => ({...v})), 
+            pipelines: pipelines.map(p => ({...p})), 
+            ts: Date.now() 
+          });
+          localStorage.setItem('waterSystemPro', data);
+        }catch(e){ console.error('Save failed:', e); }
+      },
+      load(){ 
+        try{ 
+          return JSON.parse(localStorage.getItem('waterSystemPro')||'null'); 
+        }catch{ 
+          return null; 
+        } 
+      },
+      clear(){ localStorage.removeItem('waterSystemPro'); }
+    };
+
+    // ==================== GLOBAL STATE ====================
+    let map, canvas, ctx;
+    let tanks = [], valves = [], pipelines = [];
+    let mode = 'pipeline';
+    let isDrawing = false, currentPipeline = [];
+    let hoveredDevice = null;
+    let searchAbortController = null;
+    let currentLayer = 'street';
+    let layers = {};
+    let eraseMode = false;
+    let dataCollectionInterval = null;
+
+    const POINT_R = 10;
+    const LINE_W = 4;
+    const CONNECT_THRESH = 18;
+    const CLICK_DETECT_RADIUS = 15;
+    const DATA_COLLECTION_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+    // ==================== INITIALIZATION ====================
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      initCanvas();
+      initUI();
+      loadData();
+      startAnimationLoop();
+      startDataCollection();
+    });
+
+    function initMap(){
+      map = L.map('map', {
+        zoomControl: false,
+        minZoom: 2,
+        maxZoom: 19,
+        wheelPxPerZoomLevel: 60,
+        zoomAnimation: true,
+        fadeAnimation: true,
+        inertia: true,
+        inertiaDeceleration: 3000,
+        worldCopyJump: false
+      }).setView([17.9689, 79.5941], 13);
+
+      layers.street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap',
+        maxZoom: 19,
+        maxNativeZoom: 19,
+        keepBuffer: 4
+      });
+      
+      layers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '© Esri',
+        maxZoom: 19,
+        maxNativeZoom: 18
+      });
+      
+      layers.dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© CartoDB',
+        maxZoom: 19,
+        maxNativeZoom: 19
+      });
+
+      layers.street.addTo(map);
+
+      map.scrollWheelZoom.enable();
+      map.touchZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
+      map.dragging.enable();
+      map.doubleClickZoom.enable();
+
+      map.on('move', drawCanvas);
+      map.on('zoom', drawCanvas);
+      map.on('moveend', drawCanvas);
+      map.on('zoomend', drawCanvas);
+      map.on('contextmenu', onMapRightClick);
+      map.on('click', onMapClick);
+    }
+
+    function initCanvas(){
+      canvas = document.getElementById('canvas');
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      canvas.addEventListener('mousedown', handleCanvasMouseDown);
+      canvas.addEventListener('mousemove', handleCanvasMouseMove);
+      canvas.addEventListener('mouseup', handleCanvasMouseUp);
+      canvas.addEventListener('mouseleave', handleCanvasMouseUp);
+    }
+
+    function resizeCanvas(){
+      const rect = map.getContainer().getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      drawCanvas();
+    }
+
+    function initUI(){
+      bindBtn('toolPipeline', ()=>setMode('pipeline'));
+      bindBtn('toolTank', ()=>setMode('tank'));
+      bindBtn('toolValve', ()=>setMode('valve'));
+      bindBtn('toolErase', ()=>setMode('erase'));
+      bindBtn('toolManage', openManage);
+      bindBtn('toolImport', ()=>document.getElementById('importFile').click());
+      bindBtn('toolClear', clearAll);
+      bindBtn('zoomIn', ()=>map.zoomIn());
+      bindBtn('zoomOut', ()=>map.zoomOut());
+      bindBtn('closeSidebar', closeSidebar);
+
+      document.querySelectorAll('[data-close]').forEach(btn => {
+        btn.addEventListener('click', ()=> {
+          const modalId = btn.getAttribute('data-close');
+          closeModal(modalId);
+        });
+      });
+      
+      bindBtn('saveTank', onSaveTank);
+      bindBtn('saveValve', onSaveValve);
+      bindBtn('savePipeline', onSavePipeline);
+      bindBtn('filterHistory', filterHistory);
+      bindBtn('exportHistoryCsv', exportHistoryCsv);
+
+      document.getElementById('manageModal').addEventListener('click', (e)=>{
+        const tab = e.target.closest('[data-tab]');
+        if (tab) {
+          document.querySelectorAll('[data-tab]').forEach(b => b.classList.remove('primary'));
+          tab.classList.add('primary');
+          renderManage(tab.getAttribute('data-tab'));
+        }
+      });
+
+      document.getElementById('importFile').addEventListener('change', importData);
+
+      const searchInput = document.getElementById('searchInput');
+      const searchBtn = document.getElementById('searchBtn');
+      searchInput.addEventListener('input', debounce(onSearchInput, 400));
+      searchBtn.addEventListener('click', executeSearch);
+      searchInput.addEventListener('keydown', (e)=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          executeSearch();
+        }
+        if(e.key==='Escape'){
+          hideSuggestions();
+        }
+      });
+
+      document.addEventListener('click', (e)=>{
+        if (!e.target.closest('.search')) hideSuggestions();
+        if (!e.target.closest('.layer-control')) {
+          document.getElementById('layerMenu').classList.remove('active');
+        }
+      });
+
+      bindBtn('layerBtn', ()=>{
+        document.getElementById('layerMenu').classList.toggle('active');
+      });
+
+      document.querySelectorAll('.layer-option').forEach(opt => {
+        opt.addEventListener('click', ()=>{
+          const layerType = opt.getAttribute('data-layer');
+          switchLayer(layerType);
+        });
+      });
+
+      updateToolbar();
+    }
+
+    function switchLayer(layerType){
+      Object.values(layers).forEach(layer => map.removeLayer(layer));
+      layers[layerType].addTo(map);
+      currentLayer = layerType;
+      
+      document.querySelectorAll('.layer-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.getAttribute('data-layer') === layerType);
+      });
+      
+      const names = {street: 'Street Map', satellite: 'Satellite View', dark: 'Dark Mode'};
+      document.getElementById('layerName').textContent = names[layerType];
+      document.getElementById('layerMenu').classList.remove('active');
+    }
+
+    function startDataCollection(){
+      dataCollectionInterval = setInterval(()=>{
+        tanks.forEach(t => {
+          t.generateLiveData();
+          t.recordHistory();
+        });
+        valves.forEach(v => {
+          v.generateLiveData();
+          v.recordHistory();
+        });
+        DataStore.save();
+      }, DATA_COLLECTION_INTERVAL);
+    }
+
+    // ==================== MODE CONTROL ====================
+    function setMode(m){
+      mode = m;
+      eraseMode = (m === 'erase');
+      updateToolbar();
+      
+      // Enable/disable canvas and map interactions based on mode
+      if(m === 'pipeline'){
+        canvas.classList.add('active');
+        canvas.classList.remove('drawing');
+        map.dragging.disable();
+        map.scrollWheelZoom.disable();
+        toast('✓ Pipeline mode: Click and drag to draw (Map locked)');
+      } else if(m === 'erase'){
+        canvas.classList.add('active');
+        canvas.classList.remove('drawing');
+        map.dragging.disable();
+        map.scrollWheelZoom.disable();
+        toast('✓ Erase mode: Click pipeline segments to erase (Map locked)');
+      } else {
+        canvas.classList.remove('active', 'drawing');
+        map.dragging.enable();
+        map.scrollWheelZoom.enable();
+        
+        if(m === 'tank'){
+          toast('✓ Tank mode: Click map to place tank');
+        } else if(m === 'valve'){
+          toast('✓ Valve mode: Click pipeline to add valve');
+        }
+      }
+    }
+
+    function updateToolbar(){
+      setActive('toolPipeline', mode==='pipeline');
+      setActive('toolTank', mode==='tank');
+      setActive('toolValve', mode==='valve');
+      setActive('toolErase', mode==='erase');
+    }
+
+    // ==================== MAP INTERACTIONS ====================
+    function onMapClick(e){
+      const latLng = e.latlng;
+      
+      const clickedTank = tanks.find(t => distanceInPixels(t, latLng) < CLICK_DETECT_RADIUS);
+      if(clickedTank){
+        showDevice(clickedTank, 'tank');
+        return;
+      }
+      
+      const clickedValve = valves.find(v => distanceInPixels(v, latLng) < CLICK_DETECT_RADIUS);
+      if(clickedValve){
+        showDevice(clickedValve, 'valve');
+        return;
+      }
+
+      if(mode === 'erase'){
+        eraseSegmentAtPoint(latLng);
+        return;
+      }
+
+      if(mode === 'tank'){
+        openModal('tankModal');
+        setText('tankModalTitle', 'Add Tank');
+        setValue('tankLat', latLng.lat.toFixed(6));
+        setValue('tankLng', latLng.lng.toFixed(6));
+        setValue('tankId', '');
+        document.getElementById('tankModal').removeAttribute('data-edit-id');
+        document.getElementById('tankIdError').textContent = '';
+      } else if(mode === 'valve'){
+        if(isOnAnyPipeline(latLng, 20)){
+          openModal('valveModal');
+          setText('valveModalTitle', 'Add Valve');
+          setValue('valveLat', latLng.lat.toFixed(6));
+          setValue('valveLng', latLng.lng.toFixed(6));
+          setValue('valveId', '');
+          document.getElementById('valveModal').removeAttribute('data-edit-id');
+          document.getElementById('valveIdError').textContent = '';
+        } else {
+          toast('⚠️ Place valve on a pipeline');
+        }
+      }
+    }
+
+    function onMapRightClick(e){
+      e.originalEvent.preventDefault();
+      const {lat, lng} = e.latlng;
+      setValue('tankLat', lat.toFixed(6));
+      setValue('tankLng', lng.toFixed(6));
+      setValue('valveLat', lat.toFixed(6));
+      setValue('valveLng', lng.toFixed(6));
+      toast('📍 Coordinates filled');
+    }
+
+    function eraseSegmentAtPoint(latLng){
+      for(let i = 0; i < pipelines.length; i++){
+        const pipe = pipelines[i];
+        for(let j = 0; j < pipe.points.length - 1; j++){
+          if(pointOnSegment(latLng, pipe.points[j], pipe.points[j+1], 15)){
+            if(confirm(`Erase segment from ${pipe.name}?\n\nThis will split the pipeline at this point.`)){
+              const remaining = pipe.points.slice(0, j+1);
+              if(remaining.length > 1){
+                pipe.points = remaining;
+                pipe.update({points: remaining});
+              } else {
+                pipelines.splice(i, 1);
+              }
+              DataStore.save();
+              drawCanvas();
+              toast('✓ Segment erased');
+            }
+            return;
+          }
+        }
+      }
+      toast('⚠️ Click on a pipeline segment to erase');
+    }
+
+    // ==================== CANVAS DRAWING ====================
+    function handleCanvasMouseDown(e){
+      if(mode !== 'pipeline') return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const latLng = pixelToLatLng(eventToPixel(e));
+      isDrawing = true;
+      currentPipeline = [latLng];
+      canvas.classList.add('drawing');
+      
+      console.log('Started drawing pipeline at:', latLng);
+    }
+
+    function handleCanvasMouseMove(e){
+      const px = eventToPixel(e);
+      const latLng = pixelToLatLng(px);
+
+      if(isDrawing && mode === 'pipeline'){
+        e.preventDefault();
+        const lastLatLng = currentPipeline[currentPipeline.length-1];
+        const lastPx = latLngToPixel(lastLatLng);
+        if(distanceBetweenPixels(lastPx, px) > 3){
+          currentPipeline.push(latLng);
+          drawCanvas();
+        }
+      } else {
+        const hoveredTank = tanks.find(t => distanceInPixels(t, latLng) < CLICK_DETECT_RADIUS);
+        const hoveredValve = valves.find(v => distanceInPixels(v, latLng) < CLICK_DETECT_RADIUS);
+        hoveredDevice = hoveredTank ? {type:'tank', device:hoveredTank} : 
+                        hoveredValve ? {type:'valve', device:hoveredValve} : null;
+      }
+    }
+
+    function handleCanvasMouseUp(e){
+      if(!isDrawing) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if(currentPipeline.length > 5){
+        const newPipe = new Pipeline({points: currentPipeline});
+        pipelines.push(newPipe);
+        console.log('Pipeline created:', newPipe);
+        toast('✓ Pipeline created! Fill in details.');
+        openPipelineDetailsModal(newPipe.id);
+      } else {
+        toast('⚠️ Pipeline too short - draw longer');
+      }
+      
+      currentPipeline = [];
+      isDrawing = false;
+      canvas.classList.remove('drawing');
+      
+      // Re-enable map controls after drawing
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      
+      drawCanvas();
+    }
+
+    function openPipelineDetailsModal(pipeId){
+      const pipe = pipelines.find(p => p.id === pipeId);
+      if(!pipe) return;
+      
+      openModal('pipelineModal');
+      setValue('pipelineName', pipe.name);
+      setValue('pipelineType', pipe.type);
+      setValue('pipelineDiameter', pipe.diameter);
+      setValue('pipelineCapacity', pipe.capacity);
+      setValue('pipelineStart', pipe.startPoint);
+      setValue('pipelineEnd', pipe.endPoint);
+      setValue('pipelineNotes', pipe.notes);
+      document.getElementById('pipelineModal').setAttribute('data-pipe-id', pipeId);
+    }
+
+    function onSavePipeline(){
+      const pipeId = document.getElementById('pipelineModal').getAttribute('data-pipe-id');
+      const pipe = pipelines.find(p => p.id === pipeId);
+      if(!pipe) return;
+
+      const name = val('pipelineName').trim();
+      const type = val('pipelineType');
+      const diameter = parseFloat(val('pipelineDiameter'));
+      const capacity = parseFloat(val('pipelineCapacity'));
+      const startPoint = val('pipelineStart').trim();
+      const endPoint = val('pipelineEnd').trim();
+      const notes = val('pipelineNotes').trim();
+
+      if(!name || isNaN(diameter) || isNaN(capacity)){
+        toast('⚠️ Fill all required fields');
+        return;
+      }
+
+      pipe.update({name, type, diameter, capacity, startPoint, endPoint, notes});
+      DataStore.save();
+      closeModal('pipelineModal');
+      toast('✓ Pipeline saved');
+      drawCanvas();
+      
+      // Switch back to pipeline mode for next draw
+      setMode('pipeline');
+    }
+
+    // ==================== SEARCH FUNCTIONALITY ====================
+    function levenshteinDistance(a, b){
+      const matrix = [];
+      for(let i = 0; i <= b.length; i++) matrix[i] = [i];
+      for(let j = 0; j <= a.length; j++) matrix[0][j] = j;
+      for(let i = 1; i <= b.length; i++){
+        for(let j = 1; j <= a.length; j++){
+          if(b.charAt(i-1) === a.charAt(j-1)){
+            matrix[i][j] = matrix[i-1][j-1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i-1][j-1] + 1,
+              matrix[i][j-1] + 1,
+              matrix[i-1][j] + 1
+            );
+          }
+        }
+      }
+      return matrix[b.length][a.length];
+    }
+
+    function fuzzyMatch(query, target){
+      const q = query.toLowerCase();
+      const t = target.toLowerCase();
+      if(t.includes(q)) return 100;
+      const distance = levenshteinDistance(q, t);
+      const maxLen = Math.max(q.length, t.length);
+      return Math.max(0, 100 - (distance / maxLen) * 100);
+    }
+
+    async function onSearchInput(){
+      const query = document.getElementById('searchInput').value.trim();
+      if(!query){
+        hideSuggestions();
+        return;
+      }
+
+      if(query.length < 2){
+        return;
+      }
+
+      showLoadingSuggestions();
+
+      const deviceResults = searchDevices(query);
+      const areaResults = searchByArea(query);
+
+      try{
+        if(searchAbortController) searchAbortController.abort();
+        searchAbortController = new AbortController();
+
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=8`;
+        
+        const response = await fetch(url, {
+          signal: searchAbortController.signal,
+          headers: {'Accept-Language': 'en'}
+        });
+        
+        if(!response.ok) throw new Error('Search failed');
+        
+        const places = await response.json();
+        renderSuggestions(deviceResults, areaResults, places);
+      } catch(error){
+        if(error.name !== 'AbortError'){
+          console.error('Search error:', error);
+          renderSuggestions(deviceResults, areaResults, []);
+        }
+      }
+    }
+
+    function searchDevices(query){
+      const q = query.toLowerCase();
+      const results = [];
+      
+      tanks.forEach(t => {
+        const nameScore = fuzzyMatch(q, t.name);
+        const idScore = fuzzyMatch(q, t.id);
+        const score = Math.max(nameScore, idScore);
+        if(score > 50){
+          results.push({type:'tank', device:t, score});
+        }
+      });
+      
+      valves.forEach(v => {
+        const nameScore = fuzzyMatch(q, v.name);
+        const idScore = fuzzyMatch(q, v.id);
+        const score = Math.max(nameScore, idScore);
+        if(score > 50){
+          results.push({type:'valve', device:v, score});
+        }
+      });
+      
+      results.sort((a, b) => b.score - a.score);
+      return results.slice(0, 8);
+    }
+
+    function searchByArea(query){
+      const q = query.toLowerCase();
+      const results = [];
+      const areas = new Map();
+
+      [...tanks, ...valves].forEach(device => {
+        const state = device.state || '';
+        const district = device.district || '';
+        const mandal = device.mandal || '';
+        const habitation = device.habitation || '';
+
+        const stateScore = fuzzyMatch(q, state);
+        const districtScore = fuzzyMatch(q, district);
+        const mandalScore = fuzzyMatch(q, mandal);
+        const habitationScore = fuzzyMatch(q, habitation);
+        const maxScore = Math.max(stateScore, districtScore, mandalScore, habitationScore);
+
+        if(maxScore > 60){
+          const key = `${state}|${district}|${mandal}|${habitation}`;
+          if(!areas.has(key)){
+            areas.set(key, {state, district, mandal, habitation, devices: [], score: maxScore});
+          }
+          areas.get(key).devices.push(device);
+        }
+      });
+
+      areas.forEach(area => {
+        if(area.devices.length > 0){
+          results.push(area);
+        }
+      });
+
+      results.sort((a, b) => b.score - a.score);
+      return results.slice(0, 5);
+    }
+
+    function renderSuggestions(devices, areas, places){
+      const holder = document.getElementById('suggestions');
+      const list = document.getElementById('suggestList');
+      
+      if(devices.length === 0 && areas.length === 0 && places.length === 0){
+        list.innerHTML = '<div class="suggest-item" style="text-align:center;color:var(--muted)">No results found. Try different keywords.</div>';
+        holder.style.display = 'block';
+        return;
+      }
+
+      let html = '';
+
+      if(devices.length > 0){
+        html += '<div class="suggest-item header">DEVICES</div>';
+        devices.forEach(d => {
+          const icon = d.type === 'tank' ? 'fa-database' : 'fa-cog';
+          const color = d.type === 'tank' ? '#00897b' : '#6a1b9a';
+          const location = d.device.habitation || d.device.mandal || 'Unknown';
+          html += `<div class="suggest-item" data-type="device" data-device-type="${d.type}" data-device-id="${d.device.id}">
+            <i class="fas ${icon}" style="color:${color};font-size:18px"></i>
+            <div style="flex:1">
+              <div style="font-weight:600">${d.device.name}</div>
+              <div style="font-size:11px;color:var(--muted)">${d.device.id} • ${location}</div>
+            </div>
+            <span class="match-score">${d.score.toFixed(0)}%</span>
+          </div>`;
+        });
+      }
+
+      if(areas.length > 0){
+        html += '<div class="suggest-item header">AREAS</div>';
+        areas.forEach(area => {
+          const location = [area.habitation, area.mandal, area.district, area.state].filter(Boolean).join(', ');
+          html += `<div class="suggest-item" data-type="area" data-area='${JSON.stringify(area).replace(/'/g, "&apos;")}'>
+            <i class="fas fa-map-location-dot" style="color:#f57c00;font-size:18px"></i>
+            <div style="flex:1">
+              <div style="font-weight:600">${location}</div>
+              <div style="font-size:11px;color:var(--muted)">${area.devices.length} device(s)</div>
+            </div>
+            <span class="match-score">${area.score.toFixed(0)}%</span>
+          </div>`;
+        });
+      }
+
+      if(places.length > 0){
+        html += '<div class="suggest-item header">PLACES</div>';
+        places.forEach(place => {
+          const displayName = place.display_name || 'Unknown location';
+          const name = place.name || displayName.split(',')[0];
+          html += `<div class="suggest-item" data-type="place" data-lat="${place.lat}" data-lon="${place.lon}">
+            <i class="fas fa-location-dot" style="color:#1e88e5;font-size:18px"></i>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+              <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${displayName}</div>
+            </div>
+          </div>`;
+        });
+      }
+
+      list.innerHTML = html;
+
+      list.querySelectorAll('.suggest-item[data-type]').forEach(item => {
+        item.addEventListener('click', ()=>{
+          const type = item.getAttribute('data-type');
+          
+          if(type === 'device'){
+            const deviceType = item.getAttribute('data-device-type');
+            const deviceId = item.getAttribute('data-device-id');
+            const device = deviceType === 'tank' ? 
+              tanks.find(t => t.id === deviceId) : 
+              valves.find(v => v.id === deviceId);
+            
+            if(device){
+              map.setView([device.lat, device.lng], 17);
+              showDevice(device, deviceType);
+              hideSuggestions();
+              document.getElementById('searchInput').value = '';
+            }
+          } else if(type === 'area'){
+            try{
+              const areaJson = item.getAttribute('data-area').replace(/&apos;/g, "'");
+              const area = JSON.parse(areaJson);
+              showAreaDevices(area);
+              hideSuggestions();
+              document.getElementById('searchInput').value = '';
+            } catch(e){
+              console.error('Parse error:', e);
+            }
+          } else if(type === 'place'){
+            const lat = parseFloat(item.getAttribute('data-lat'));
+            const lon = parseFloat(item.getAttribute('data-lon'));
+            if(!isNaN(lat) && !isNaN(lon)){
+              map.setView([lat, lon], 15);
+              hideSuggestions();
+              document.getElementById('searchInput').value = '';
+              toast('📍 Location found');
+            }
+          }
+        });
+      });
+
+      holder.style.display = 'block';
+    }
+
+    function showAreaDevices(area){
+      const bounds = L.latLngBounds();
+      area.devices.forEach(d => bounds.extend([d.lat, d.lng]));
+      map.fitBounds(bounds, {padding: [50, 50]});
+      
+      const location = [area.habitation, area.mandal, area.district, area.state].filter(Boolean).join(', ');
+      toast(`📍 Showing ${area.devices.length} devices in ${location}`);
+    }
+
+    function showLoadingSuggestions(){
+      const holder = document.getElementById('suggestions');
+      const list = document.getElementById('suggestList');
+      list.innerHTML = '<div class="suggest-item" style="text-align:center"><i class="fas fa-spinner fa-spin"></i> Searching...</div>';
+      holder.style.display = 'block';
+    }
+
+    function hideSuggestions(){
+      document.getElementById('suggestions').style.display = 'none';
+    }
+
+    function executeSearch(){
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      if(!query){
+        toast('⚠️ Enter search query');
+        return;
+      }
+
+      // Exact ID match
+      let device = [...tanks, ...valves].find(d => d.id.toLowerCase() === query);
+      
+      // Fuzzy name/ID match
+      if(!device){
+        const matches = [...tanks, ...valves].filter(d => 
+          fuzzyMatch(query, d.name) > 70 || fuzzyMatch(query, d.id) > 70
+        ).sort((a, b) => {
+          const scoreA = Math.max(fuzzyMatch(query, a.name), fuzzyMatch(query, a.id));
+          const scoreB = Math.max(fuzzyMatch(query, b.name), fuzzyMatch(query, b.id));
+          return scoreB - scoreA;
+        });
+        
+        if(matches.length > 0){
+          device = matches[0];
+        }
+      }
+
+      if(device){
+        const type = tanks.includes(device) ? 'tank' : 'valve';
+        map.setView([device.lat, device.lng], 17);
+        showDevice(device, type);
+        hideSuggestions();
+        toast(`✓ Found: ${device.name}`);
+        return;
+      }
+
+      // Trigger suggestion search
+      onSearchInput();
+      toast('🔍 Searching...');
+    }
+
+    // ==================== CRUD OPERATIONS ====================
+    function validateDeviceId(id, excludeId = null){
+      if(!id || id.trim().length === 0) return 'Device ID is required';
+      const trimmedId = id.trim();
+      if(trimmedId.length > 50) return 'Device ID must be 50 characters or less';
+      
+      const exists = [...tanks, ...valves].some(d => d.id === trimmedId && d.id !== excludeId);
+      if(exists) return 'Device ID already exists. Please use a unique ID.';
+      
+      return null;
+    }
+
+    function onSaveTank(){
+      const id = val('tankId').trim();
+      const name = val('tankName').trim();
+      const type = val('tankType');
+      const capacity = parseFloat(val('tankCapacity'));
+      const lat = parseFloat(val('tankLat'));
+      const lng = parseFloat(val('tankLng'));
+      const state = val('tankState').trim();
+      const district = val('tankDistrict').trim();
+      const mandal = val('tankMandal').trim();
+      const habitation = val('tankHabitation').trim();
+
+      const editingId = document.getElementById('tankModal').getAttribute('data-edit-id');
+      const idError = validateDeviceId(id, editingId);
+      
+      if(idError){
+        document.getElementById('tankIdError').textContent = idError;
+        return;
+      }
+
+      if(!name || isNaN(lat) || isNaN(lng) || isNaN(capacity)){
+        toast('⚠️ Fill all required fields');
+        return;
+      }
+
+      if(editingId){
+        const tank = tanks.find(t => t.id === editingId);
+        if(tank){
+          tank.update({id, name, type, capacity, state, district, mandal, habitation, lat, lng});
+          toast('✓ Tank updated');
+        }
+      } else {
+        const tank = new Tank({id, name, type, capacity, state, district, mandal, habitation, lat, lng});
+        tank.recordHistory();
+        tanks.push(tank);
+        toast('✓ Tank added');
+      }
+
+      document.getElementById('tankModal').removeAttribute('data-edit-id');
+      document.getElementById('tankIdError').textContent = '';
+      DataStore.save();
+      closeModal('tankModal');
+      drawCanvas();
+      setMode('pipeline');
+    }
+
+    function onSaveValve(){
+      const id = val('valveId').trim();
+      const name = val('valveName').trim();
+      const type = val('valveType');
+      const lat = parseFloat(val('valveLat'));
+      const lng = parseFloat(val('valveLng'));
+      const mandal = val('valveMandal').trim();
+      const habitation = val('valveHabitation').trim();
+
+      const editingId = document.getElementById('valveModal').getAttribute('data-edit-id');
+      const idError = validateDeviceId(id, editingId);
+      
+      if(idError){
+        document.getElementById('valveIdError').textContent = idError;
+        return;
+      }
+
+      if(!name || isNaN(lat) || isNaN(lng)){
+        toast('⚠️ Fill all required fields');
+        return;
+      }
+
+      if(editingId){
+        const valve = valves.find(v => v.id === editingId);
+        if(valve){
+          valve.update({id, name, type, mandal, habitation, lat, lng});
+          toast('✓ Valve updated');
+        }
+      } else {
+        if(!isOnAnyPipeline({lat, lng}, 20)){
+          toast('⚠️ Valve must be on a pipeline');
+          return;
+        }
+        const valve = new Valve({id, name, type, mandal, habitation, lat, lng});
+        valve.recordHistory();
+        valves.push(valve);
+        toast('✓ Valve added');
+      }
+
+      document.getElementById('valveModal').removeAttribute('data-edit-id');
+      document.getElementById('valveIdError').textContent = '';
+      DataStore.save();
+      closeModal('valveModal');
+      drawCanvas();
+    }
+
+    function editTank(id){
+      const tank = tanks.find(t => t.id === id);
+      if(!tank) return;
+
+      setText('tankModalTitle', 'Edit Tank');
+      openModal('tankModal');
+      document.getElementById('tankModal').setAttribute('data-edit-id', id);
+      
+      setValue('tankId', tank.id);
+      setValue('tankName', tank.name);
+      setValue('tankType', tank.type);
+      setValue('tankCapacity', tank.capacity);
+      setValue('tankState', tank.state);
+      setValue('tankDistrict', tank.district);
+      setValue('tankMandal', tank.mandal);
+      setValue('tankHabitation', tank.habitation);
+      setValue('tankLat', tank.lat);
+      setValue('tankLng', tank.lng);
+      document.getElementById('tankIdError').textContent = '';
+    }
+
+    function editValve(id){
+      const valve = valves.find(v => v.id === id);
+      if(!valve) return;
+
+      setText('valveModalTitle', 'Edit Valve');
+      openModal('valveModal');
+      document.getElementById('valveModal').setAttribute('data-edit-id', id);
+      
+      setValue('valveId', valve.id);
+      setValue('valveName', valve.name);
+      setValue('valveType', valve.type);
+      setValue('valveMandal', valve.mandal);
+      setValue('valveHabitation', valve.habitation);
+      setValue('valveLat', valve.lat);
+      setValue('valveLng', valve.lng);
+      document.getElementById('valveIdError').textContent = '';
+    }
+
+    function deleteTank(id){
+      if(!confirm('Delete this tank? This action cannot be undone.')){
+        return;
+      }
+      tanks = tanks.filter(t => t.id !== id);
+      DataStore.save();
+      closeSidebar();
+      drawCanvas();
+      toast('✓ Tank deleted');
+      if(document.getElementById('manageModal').classList.contains('active')){
+        renderManage('tanks');
+      }
+    }
+
+    function deleteValve(id){
+      if(!confirm('Delete this valve? This action cannot be undone.')){
+        return;
+      }
+      valves = valves.filter(v => v.id !== id);
+      DataStore.save();
+      closeSidebar();
+      drawCanvas();
+      toast('✓ Valve deleted');
+      if(document.getElementById('manageModal').classList.contains('active')){
+        renderManage('valves');
+      }
+    }
+
+    function deletePipeline(id){
+      const index = pipelines.findIndex(p => p.id === id);
+      if(index < 0) return;
+      if(!confirm('Delete this pipeline? This action cannot be undone.')){
+        return;
+      }
+      pipelines.splice(index, 1);
+      DataStore.save();
+      drawCanvas();
+      toast('✓ Pipeline deleted');
+      renderManage('pipelines');
+    }
+
+    function editPipeline(id){
+      openPipelineDetailsModal(id);
+    }
+
+    function centerPipeline(id){
+      const pipe = pipelines.find(p => p.id === id);
+      if(!pipe || pipe.points.length === 0) return;
+      const mid = pipe.points[Math.floor(pipe.points.length / 2)];
+      map.setView([mid.lat, mid.lng], Math.max(map.getZoom(), 16));
+      closeModal('manageModal');
+    }
+
+    function clearAll(){
+      if(!confirm('⚠️ Clear ALL tanks, valves, and pipelines? This cannot be undone!')){
+        return;
+      }
+      tanks = [];
+      valves = [];
+      pipelines = [];
+      isDrawing = false;
+      currentPipeline = [];
+      DataStore.clear();
+      closeSidebar();
+      drawCanvas();
+      toast('✓ All data cleared');
+    }
+
+    // ==================== MANAGE MODAL ====================
+    function openManage(){
+      openModal('manageModal');
+      document.querySelectorAll('[data-tab]').forEach(b => b.classList.remove('primary'));
+      document.querySelector('[data-tab="tanks"]').classList.add('primary');
+      renderManage('tanks');
+    }
+
+    function renderManage(tab){
+      const content = document.getElementById('manageContent');
+      
+      if(tab === 'tanks'){
+        if(tanks.length === 0){
+          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No tanks yet</div></div>';
+          return;
+        }
+        
+        content.innerHTML = '<div class="manage-list">' + tanks.map(t => `
+          <div class="manage-item">
+            <div class="manage-item-info">
+              <div class="manage-item-title">${t.name}</div>
+              <div class="manage-item-meta">${t.id} • ${t.type} • ${t.capacity}L • ${t.lat.toFixed(5)}, ${t.lng.toFixed(5)}</div>
+            </div>
+            <div class="manage-item-actions">
+              <button class="btn primary" onclick="viewTank('${t.id}')"><i class="fas fa-eye"></i></button>
+              <button class="btn" onclick="editTank('${t.id}')"><i class="fas fa-pen"></i></button>
+              <button class="btn danger" onclick="deleteTank('${t.id}')"><i class="fas fa-trash"></i></button>
+            </div>
+          </div>
+        `).join('') + '</div>';
+        
+      } else if(tab === 'valves'){
+        if(valves.length === 0){
+          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No valves yet</div></div>';
+          return;
+        }
+        
+        content.innerHTML = '<div class="manage-list">' + valves.map(v => `
+          <div class="manage-item">
+            <div class="manage-item-info">
+              <div class="manage-item-title">${v.name}</div>
+              <div class="manage-item-meta">${v.id} • ${v.type} • ${v.valveState} • ${v.lat.toFixed(5)}, ${v.lng.toFixed(5)}</div>
+            </div>
+            <div class="manage-item-actions">
+              <button class="btn primary" onclick="viewValve('${v.id}')"><i class="fas fa-eye"></i></button>
+              <button class="btn" onclick="editValve('${v.id}')"><i class="fas fa-pen"></i></button>
+              <button class="btn danger" onclick="deleteValve('${v.id}')"><i class="fas fa-trash"></i></button>
+            </div>
+          </div>
+        `).join('') + '</div>';
+        
+      } else if(tab === 'pipelines'){
+        if(pipelines.length === 0){
+          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No pipelines yet</div></div>';
+          return;
+        }
+        
+        content.innerHTML = '<div class="manage-list">' + pipelines.map(p => `
+          <div class="manage-item">
+            <div class="manage-item-info">
+              <div class="manage-item-title">${p.name}</div>
+              <div class="manage-item-meta">${p.type} • ${p.diameter}mm • ${p.capacity}L/min • ${p.points.length} points</div>
+            </div>
+            <div class="manage-item-actions">
+              <button class="btn primary" onclick="centerPipeline('${p.id}')"><i class="fas fa-crosshairs"></i></button>
+              <button class="btn" onclick="editPipeline('${p.id}')"><i class="fas fa-pen"></i></button>
+              <button class="btn danger" onclick="deletePipeline('${p.id}')"><i class="fas fa-trash"></i></button>
+            </div>
+          </div>
+        `).join('') + '</div>';
+        
+      } else if(tab === 'search'){
+        content.innerHTML = `
+          <div class="card">
+            <h4><i class="fas fa-search"></i> ADVANCED SEARCH</h4>
+            <div class="advanced-search">
+              <div class="form-row">
+                <label>State</label>
+                <input id="searchState" placeholder="e.g., Telangana"/>
+              </div>
+              <div class="form-row">
+                <label>District</label>
+                <input id="searchDistrict" placeholder="e.g., Mulugu"/>
+              </div>
+              <div class="form-row">
+                <label>Mandal</label>
+                <input id="searchMandal" placeholder="e.g., Eturunagaram"/>
+              </div>
+              <div class="form-row">
+                <label>Habitation</label>
+                <input id="searchHabitation" placeholder="e.g., Ellishettypalle"/>
+              </div>
+            </div>
+            <button class="btn primary" onclick="searchByAreaAdvanced()"><i class="fas fa-search"></i> Search by Area</button>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-hashtag"></i> SEARCH BY DEVICE ID</h4>
+            <div class="form-row" style="margin:0">
+              <input id="searchById" placeholder="Enter device ID (e.g., TANK-001)"/>
+            </div>
+            <button class="btn primary" onclick="searchByDeviceId()"><i class="fas fa-search"></i> Find Device</button>
+          </div>
+          <div id="searchResults"></div>
+        `;
+        
+      } else if(tab === 'data'){
+        content.innerHTML = `
+          <div class="card">
+            <h4><i class="fas fa-file-export"></i> EXPORT DATA</h4>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Download all tanks, valves, and pipelines as JSON</p>
+            <button class="btn success" onclick="exportData()"><i class="fas fa-download"></i> Export JSON</button>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-file-import"></i> IMPORT DATA</h4>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Load data from a JSON file</p>
+            <button class="btn primary" onclick="document.getElementById('importFile').click()"><i class="fas fa-upload"></i> Import JSON</button>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-info-circle"></i> STATISTICS</h4>
+            <div class="row"><span class="label">Tanks</span><span class="value">${tanks.length}</span></div>
+            <div class="row"><span class="label">Valves</span><span class="value">${valves.length}</span></div>
+            <div class="row"><span class="label">Pipelines</span><span class="value">${pipelines.length}</span></div>
+            <div class="row"><span class="label">Total capacity</span><span class="value">${tanks.reduce((sum, t) => sum + t.capacity, 0).toLocaleString()} L</span></div>
+            <div class="row"><span class="label">Active valves</span><span class="value">${valves.filter(v => v.active).length}</span></div>
+            <div class="row"><span class="label">Data collection</span><span class="value">Every 5 min</span></div>
+          </div>
+        `;
+      }
+    }
+
+    function searchByAreaAdvanced(){
+      const state = val('searchState').trim().toLowerCase();
+      const district = val('searchDistrict').trim().toLowerCase();
+      const mandal = val('searchMandal').trim().toLowerCase();
+      const habitation = val('searchHabitation').trim().toLowerCase();
+
+      if(!state && !district && !mandal && !habitation){
+        toast('⚠️ Enter at least one search criteria');
+        return;
+      }
+
+      const results = [...tanks, ...valves].filter(d => {
+        return (
+          (!state || (d.state || '').toLowerCase().includes(state)) &&
+          (!district || (d.district || '').toLowerCase().includes(district)) &&
+          (!mandal || (d.mandal || '').toLowerCase().includes(mandal)) &&
+          (!habitation || (d.habitation || '').toLowerCase().includes(habitation))
+        );
+      });
+
+      displaySearchResults(results);
+    }
+
+    function searchByDeviceId(){
+      const id = val('searchById').trim();
+      if(!id){
+        toast('⚠️ Enter a device ID');
+        return;
+      }
+
+      const device = [...tanks, ...valves].find(d => 
+        d.id.toLowerCase() === id.toLowerCase() || fuzzyMatch(id, d.id) > 80
+      );
+
+      if(device){
+        closeModal('manageModal');
+        map.setView([device.lat, device.lng], 17);
+        const type = tanks.includes(device) ? 'tank' : 'valve';
+        showDevice(device, type);
+        toast('✓ Device found');
+      } else {
+        const results = [...tanks, ...valves].filter(d => 
+          d.id.toLowerCase().includes(id.toLowerCase())
+        );
+        if(results.length > 0){
+          displaySearchResults(results);
+          toast(`Found ${results.length} similar device(s)`);
+        } else {
+          toast('❌ Device not found');
+        }
+      }
+    }
+
+    function displaySearchResults(results){
+      const container = document.getElementById('searchResults');
+      if(results.length === 0){
+        container.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)">No devices found matching your criteria</div>';
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="card">
+          <h4><i class="fas fa-list"></i> SEARCH RESULTS (${results.length})</h4>
+          <div class="manage-list">
+            ${results.map(d => {
+              const isTank = tanks.includes(d);
+              const type = isTank ? 'tank' : 'valve';
+              const icon = isTank ? 'fa-database' : 'fa-cog';
+              const color = isTank ? '#00897b' : '#6a1b9a';
+              return `
+                <div class="manage-item">
+                  <i class="fas ${icon}" style="color:${color};font-size:20px"></i>
+                  <div class="manage-item-info">
+                    <div class="manage-item-title">${d.name}</div>
+                    <div class="manage-item-meta">${d.id} • ${type.toUpperCase()} • ${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}</div>
+                  </div>
+                  <div class="manage-item-actions">
+                    <button class="btn primary" onclick="viewDevice('${d.id}', '${type}')"><i class="fas fa-eye"></i></button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function viewDevice(id, type){
+      const device = type === 'tank' ? tanks.find(t => t.id === id) : valves.find(v => v.id === id);
+      if(device){
+        closeModal('manageModal');
+        map.setView([device.lat, device.lng], 17);
+        showDevice(device, type);
+      }
+    }
+
+    function viewTank(id){
+      viewDevice(id, 'tank');
+    }
+
+    function viewValve(id){
+      viewDevice(id, 'valve');
+    }
+
+    // ==================== IMPORT/EXPORT ====================
+    function exportData(){
+      const data = {
+        tanks: tanks.map(t => ({...t})),
+        valves: valves.map(v => ({...v})),
+        pipelines: pipelines.map(p => ({...p})),
+        version: '2.0',
+        timestamp: Date.now(),
+        exportDate: new Date().toISOString()
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `water-system-pro-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('✓ Data exported');
+    }
+
+    function importData(e){
+      const file = e.target.files[0];
+      if(!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const data = JSON.parse(reader.result);
+          tanks = (data.tanks || []).map(t => new Tank(t));
+          valves = (data.valves || []).map(v => new Valve(v));
+          pipelines = (data.pipelines || []).map(p => new Pipeline(p));
+          DataStore.save();
+          drawCanvas();
+          toast('✓ Data imported successfully');
+          if(document.getElementById('manageModal').classList.contains('active')){
+            renderManage('data');
+          }
+        } catch(error){
+          console.error('Import error:', error);
+          toast('⚠️ Invalid JSON file');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    }
+
+    function loadData(){
+      const data = DataStore.load();
+      if(!data) return;
+      
+      tanks = (data.tanks || []).map(t => new Tank(t));
+      valves = (data.valves || []).map(v => new Valve(v));
+      pipelines = (data.pipelines || []).map(p => new Pipeline(p));
+      drawCanvas();
+      toast('✓ Session restored');
+    }
+
+    // ==================== SIDEBAR & HISTORY ====================
+    function showDevice(device, type){
+      const sidebar = document.getElementById('sidebar');
+      const body = document.getElementById('sidebarBody');
+      
+      setText('sidebarTitle', `${type === 'tank' ? '🗄️ Tank' : '⚙️ Valve'}: ${device.name}`);
+      
+      if(type === 'tank'){
+        const info = device.info();
+        body.innerHTML = `
+          <div class="card">
+            <h4><i class="fas fa-info-circle"></i> DETAILS</h4>
+            <div class="row"><span class="label">ID</span><span class="value">${info.id}</span></div>
+            <div class="row"><span class="label">Type</span><span class="value">${info.type}</span></div>
+            <div class="row"><span class="label">Capacity</span><span class="value">${info.capacity}</span></div>
+            <div class="row"><span class="label">Status</span><span class="value" style="color:var(--success)">${info.status.toUpperCase()}</span></div>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-chart-line"></i> LIVE METRICS <span class="live-indicator"></span></h4>
+            <div class="row"><span class="label">Water level</span><span class="value">${info.waterLevel}</span></div>
+            <div class="row"><span class="label">Pressure</span><span class="value">${info.pressure}</span></div>
+            <div class="row"><span class="label">Flow rate</span><span class="value">${info.flowRate}</span></div>
+            <div class="row"><span class="label">pH</span><span class="value">${info.pH}</span></div>
+            <div class="row"><span class="label">Temperature</span><span class="value">${info.temperature}</span></div>
+            <div class="row"><span class="label">Last update</span><span class="value">${new Date(device.lastUpdate).toLocaleTimeString()}</span></div>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-map-marker-alt"></i> LOCATION</h4>
+            <div class="row"><span class="label">State</span><span class="value">${info.loc.state}</span></div>
+            <div class="row"><span class="label">District</span><span class="value">${info.loc.district}</span></div>
+            <div class="row"><span class="label">Mandal</span><span class="value">${info.loc.mandal}</span></div>
+            <div class="row"><span class="label">Habitation</span><span class="value">${info.loc.habitation}</span></div>
+            <div class="row"><span class="label">Coordinates</span><span class="value">${info.loc.coords}</span></div>
+            <button class="btn primary" onclick="map.setView([${device.lat},${device.lng}],18)"><i class="fas fa-crosshairs"></i> Center on Map</button>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-history"></i> HISTORY</h4>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">${device.history.length} records collected</p>
+            <button class="btn primary" onclick="showHistory('${device.id}', 'tank')"><i class="fas fa-table"></i> View Full History</button>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-tools"></i> ACTIONS</h4>
+            <button class="btn" onclick="editTank('${device.id}')"><i class="fas fa-pen"></i> Edit Tank</button>
+            <button class="btn danger" onclick="deleteTank('${device.id}')"><i class="fas fa-trash"></i> Delete Tank</button>
+          </div>
+        `;
+      } else {
+        const info = device.info();
+        body.innerHTML = `
+          <div class="card">
+            <h4><i class="fas fa-info-circle"></i> DETAILS</h4>
+            <div class="row"><span class="label">ID</span><span class="value">${info.id}</span></div>
+            <div class="row"><span class="label">Type</span><span class="value">${info.type}</span></div>
+            <div class="row"><span class="label">Direction</span><span class="value">${info.flowDirection}</span></div>
+            <div class="row"><span class="label">State</span><span class="value" style="color:${device.active ? 'var(--danger)' : 'var(--success)'}">${info.valveState.toUpperCase()}</span></div>
+            <div class="row"><span class="label">Status</span><span class="value">${info.status.toUpperCase()}</span></div>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-chart-line"></i> LIVE SENSORS <span class="live-indicator"></span></h4>
+            <div class="row"><span class="label">Battery</span><span class="value">${info.battery}</span></div>
+            <div class="row"><span class="label">Pressure</span><span class="value">${info.pressure}</span></div>
+            <div class="row"><span class="label">Last update</span><span class="value">${new Date(device.lastUpdate).toLocaleTimeString()}</span></div>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-map-marker-alt"></i> LOCATION</h4>
+            <div class="row"><span class="label">Mandal</span><span class="value">${info.loc.mandal}</span></div>
+            <div class="row"><span class="label">Habitation</span><span class="value">${info.loc.habitation}</span></div>
+            <div class="row"><span class="label">Coordinates</span><span class="value">${info.loc.coords}</span></div>
+            <button class="btn primary" onclick="map.setView([${device.lat},${device.lng}],18)"><i class="fas fa-crosshairs"></i> Center on Map</button>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-sliders"></i> FLOW CONTROL</h4>
+            <button class="btn success" onclick="setValveFlow('${device.id}', false)" ${!device.active ? 'disabled' : ''}><i class="fas fa-check"></i> Open Valve</button>
+            <button class="btn danger" onclick="setValveFlow('${device.id}', true)" ${device.active ? 'disabled' : ''}><i class="fas fa-ban"></i> Close Valve</button>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-history"></i> HISTORY</h4>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">${device.history.length} records collected</p>
+            <button class="btn primary" onclick="showHistory('${device.id}', 'valve')"><i class="fas fa-table"></i> View Full History</button>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-tools"></i> ACTIONS</h4>
+            <button class="btn" onclick="editValve('${device.id}')"><i class="fas fa-pen"></i> Edit Valve</button>
+            <button class="btn danger" onclick="deleteValve('${device.id}')"><i class="fas fa-trash"></i> Delete Valve</button>
+          </div>
+        `;
+      }
+      
+      sidebar.classList.add('open');
+    }
+
+    function showHistory(deviceId, type){
+      const device = type === 'tank' ? tanks.find(t => t.id === deviceId) : valves.find(v => v.id === deviceId);
+      if(!device) return;
+
+      openModal('historyModal');
+      setText('historyModalTitle', `${device.name} - History`);
+      document.getElementById('historyModal').setAttribute('data-device-id', deviceId);
+      document.getElementById('historyModal').setAttribute('data-device-type', type);
+      renderHistory(device, type);
+    }
+
+    function renderHistory(device, type){
+      const content = document.getElementById('historyContent');
+      if(device.history.length === 0){
+        content.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">No historical data yet. Data is collected every 5 minutes.</div>';
+        return;
+      }
+
+      const sortedHistory = [...device.history].sort((a, b) => b.timestamp - a.timestamp);
+
+      if(type === 'tank'){
+        content.innerHTML = `
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Water Level</th>
+                <th>Pressure</th>
+                <th>Flow Rate</th>
+                <th>pH</th>
+                <th>Temperature</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sortedHistory.map(record => `
+                <tr>
+                  <td>${new Date(record.timestamp).toLocaleString()}</td>
+                  <td>${record.waterLevel} m</td>
+                  <td>${record.pressure} PSI</td>
+                  <td>${record.flowRate} L/min</td>
+                  <td>${record.pH}</td>
+                  <td>${record.temperature}°C</td>
+                  <td>${record.status}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        content.innerHTML = `
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Valve State</th>
+                <th>Active</th>
+                <th>Battery</th>
+                <th>Pressure</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sortedHistory.map(record => `
+                <tr>
+                  <td>${new Date(record.timestamp).toLocaleString()}</td>
+                  <td>${record.valveState}</td>
+                  <td>${record.active ? 'Yes' : 'No'}</td>
+                  <td>${record.battery}%</td>
+                  <td>${record.pressure} PSI</td>
+                  <td>${record.status}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+
+    function filterHistory(){
+      const deviceId = document.getElementById('historyModal').getAttribute('data-device-id');
+      const deviceType = document.getElementById('historyModal').getAttribute('data-device-type');
+      const device = deviceType === 'tank' ? tanks.find(t => t.id === deviceId) : valves.find(v => v.id === deviceId);
+      if(!device) return;
+
+      const startDate = document.getElementById('historyStartDate').value;
+      const endDate = document.getElementById('historyEndDate').value;
+
+      let filtered = [...device.history];
+
+      if(startDate){
+        const start = new Date(startDate).getTime();
+        filtered = filtered.filter(r => r.timestamp >= start);
+      }
+
+      if(endDate){
+        const end = new Date(endDate).getTime();
+        filtered = filtered.filter(r => r.timestamp <= end);
+      }
+
+      const tempDevice = {...device, history: filtered};
+      renderHistory(tempDevice, deviceType);
+      toast(`✓ Showing ${filtered.length} records`);
+    }
+
+    function exportHistoryCsv(){
+      const deviceId = document.getElementById('historyModal').getAttribute('data-device-id');
+      const deviceType = document.getElementById('historyModal').getAttribute('data-device-type');
+      const device = deviceType === 'tank' ? tanks.find(t => t.id === deviceId) : valves.find(v => v.id === deviceId);
+      if(!device || device.history.length === 0){
+        toast('⚠️ No data to export');
+        return;
+      }
+
+      let csv = '';
+      
+      if(deviceType === 'tank'){
+        csv = 'Timestamp,Water Level (m),Pressure (PSI),Flow Rate (L/min),pH,Temperature (°C),Status\n';
+        device.history.forEach(record => {
+          csv += `${new Date(record.timestamp).toISOString()},${record.waterLevel},${record.pressure},${record.flowRate},${record.pH},${record.temperature},${record.status}\n`;
+        });
+      } else {
+        csv = 'Timestamp,Valve State,Active,Battery (%),Pressure (PSI),Status\n';
+        device.history.forEach(record => {
+          csv += `${new Date(record.timestamp).toISOString()},${record.valveState},${record.active},${record.battery},${record.pressure},${record.status}\n`;
+        });
+      }
+
+      const blob = new Blob([csv], {type: 'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${device.id}-history-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('✓ History exported to CSV');
+    }
+
+    function closeSidebar(){
+      document.getElementById('sidebar').classList.remove('open');
+    }
+
+    function setValveFlow(id, shouldBlock){
+      const valve = valves.find(v => v.id === id);
+      if(!valve) return;
+      
+      valve.active = shouldBlock;
+      valve.valveState = shouldBlock ? 'closed' : 'open';
+      valve.recordHistory();
+      
+      const affectedPipelines = findAffectedPipelines(valve);
+      DataStore.save();
+      drawCanvas();
+      
+      const pipeNames = affectedPipelines.map(p => p.name).join(', ');
+      if(shouldBlock){
+        toast(`🔴 Valve closed - Affected pipelines: ${pipeNames || 'None'}`);
+      } else {
+        toast(`✓ Valve opened - Restored flow to: ${pipeNames || 'None'}`);
+      }
+      
+      showDevice(valve, 'valve');
+    }
+
+    function findAffectedPipelines(valve){
+      const affected = [];
+      pipelines.forEach(pipe => {
+        for(let i = 0; i < pipe.points.length - 1; i++){
+          if(pointOnSegment(valve, pipe.points[i], pipe.points[i+1], POINT_R + 4)){
+            affected.push(pipe);
+            break;
+          }
+        }
+      });
+      return affected;
+    }
+
+    // ==================== FLOW CALCULATION ====================
+    function isSegmentBlocked(p1, p2){
+      return valves.some(v => v.active && pointOnSegment(v, p1, p2, POINT_R + 4));
+    }
+
+    function connectedSegments(point, excludePi = -1, excludeSi = -1){
+      const results = [];
+      pipelines.forEach((pipe, pi) => {
+        for(let i = 0; i < pipe.points.length - 1; i++){
+          if(pi === excludePi && i === excludeSi) continue;
+          const p1 = pipe.points[i], p2 = pipe.points[i + 1];
+          if(distanceInPixels(point, p1) < CONNECT_THRESH || distanceInPixels(point, p2) < CONNECT_THRESH){
+            results.push({pi, si: i});
+          }
+        }
+      });
+      return results;
+    }
+
+    function computeFlow(){
+      const flow = {p: {}};
+      if(tanks.length === 0 || pipelines.length === 0) return flow;
+
+      const starts = [];
+      tanks.forEach(tank => {
+        pipelines.forEach((pipe, pi) => {
+          for(let i = 0; i < pipe.points.length - 1; i++){
+            if(pointOnSegment(tank, pipe.points[i], pipe.points[i + 1], 20)){
+              starts.push({pi, si: i});
+            }
+          }
+        });
+      });
+
+      if(starts.length === 0) return flow;
+
+      const seen = new Set();
+      const queue = [...starts];
+
+      while(queue.length > 0){
+        const current = queue.shift();
+        const key = `${current.pi}-${current.si}`;
+        
+        if(seen.has(key)) continue;
+        seen.add(key);
+
+        const pipe = pipelines[current.pi].points;
+        const p1 = pipe[current.si];
+        const p2 = pipe[current.si + 1];
+        const blocked = isSegmentBlocked(p1, p2);
+
+        if(!flow.p[current.pi]) flow.p[current.pi] = {s: {}};
+        flow.p[current.pi].s[current.si] = {hasFlow: !blocked, blocked};
+
+        if(!blocked){
+          if(current.si + 1 < pipe.length - 1){
+            queue.push({pi: current.pi, si: current.si + 1});
+          }
+          if(current.si - 1 >= 0){
+            queue.push({pi: current.pi, si: current.si - 1});
+          }
+
+          [p1, p2].forEach(endpoint => {
+            connectedSegments(endpoint, current.pi, current.si).forEach(neighbor => {
+              const neighborKey = `${neighbor.pi}-${neighbor.si}`;
+              if(!seen.has(neighborKey)){
+                queue.push(neighbor);
+              }
+            });
+          });
+        }
+      }
+
+      pipelines.forEach((pipe, pi) => {
+        if(flow.p[pi]){
+          const flowingSegments = Object.values(flow.p[pi].s).filter(s => s.hasFlow).length;
+          const totalSegments = pipe.points.length - 1;
+          pipe.currentFlow = totalSegments > 0 ? (flowingSegments / totalSegments) * pipe.capacity : 0;
+        } else {
+          pipe.currentFlow = 0;
+        }
+      });
+
+      return flow;
+    }
+
+    // ==================== DRAWING ====================
+    function startAnimationLoop(){
+      requestAnimationFrame(function loop(){
+        drawCanvas();
+        requestAnimationFrame(loop);
+      });
+    }
+
+    function drawCanvas(){
+      if(!ctx || !map) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const flow = computeFlow();
+
+      pipelines.forEach((pipe, pi) => {
+        for(let i = 0; i < pipe.points.length - 1; i++){
+          const p1 = pipe.points[i];
+          const p2 = pipe.points[i + 1];
+          const stat = flow.p[pi]?.s[i];
+          const hasFlow = !!stat?.hasFlow;
+          const blocked = !!stat?.blocked;
+          const connected = stat !== undefined;
+
+          let color = '#b0b9c4';
+          let glow = 'rgba(176,185,196,0.4)';
+          
+          if(connected){
+            if(blocked){
+              color = '#d32f2f';
+              glow = 'rgba(211,47,47,0.6)';
+            } else if(hasFlow){
+              color = '#1e88e5';
+              glow = 'rgba(30,136,229,0.6)';
+            }
+          }
+
+          const a = latLngToPixel(p1);
+          const b = latLngToPixel(p2);
+
+          ctx.shadowColor = glow;
+          ctx.shadowBlur = 14;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = LINE_W;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+          
+          ctx.shadowBlur = 0;
+        }
+
+        if(pipe.currentFlow > 0 && pipe.points.length > 0){
+          const midPoint = pipe.points[Math.floor(pipe.points.length / 2)];
+          const px = latLngToPixel(midPoint);
+          
+          ctx.fillStyle = 'rgba(30,136,229,0.9)';
+          ctx.font = 'bold 11px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          ctx.shadowColor = 'rgba(0,0,0,0.3)';
+          ctx.shadowBlur = 4;
+          
+          const flowText = `${pipe.currentFlow.toFixed(0)} L/min`;
+          ctx.fillText(flowText, px.x, px.y - 12);
+          
+          ctx.shadowBlur = 0;
+        }
+      });
+
+      if(currentPipeline.length > 1){
+        ctx.strokeStyle = '#9aa7b5';
+        ctx.lineWidth = LINE_W;
+        ctx.shadowColor = 'rgba(154,167,181,0.5)';
+        ctx.shadowBlur = 12;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        const start = latLngToPixel(currentPipeline[0]);
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        
+        for(let i = 1; i < currentPipeline.length; i++){
+          const p = latLngToPixel(currentPipeline[i]);
+          ctx.lineTo(p.x, p.y);
+        }
+        
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      valves.forEach(valve => {
+        const p = latLngToPixel(valve);
+        const hovered = hoveredDevice?.device === valve;
+        const scale = hovered ? 1.2 : 1.0;
+
+        ctx.shadowColor = valve.active ? 'rgba(211,47,47,0.7)' : 'rgba(106,27,154,0.7)';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = valve.active ? 'rgba(211,47,47,0.15)' : 'rgba(106,27,154,0.15)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (POINT_R + 6) * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = valve.active ? '#d32f2f' : '#6a1b9a';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, POINT_R * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, POINT_R * scale, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.shadowBlur = 0;
+      });
+
+      tanks.forEach(tank => {
+        const p = latLngToPixel(tank);
+        const hovered = hoveredDevice?.device === tank;
+        const scale = hovered ? 1.2 : 1.0;
+
+        ctx.shadowColor = 'rgba(0,137,123,0.7)';
+        ctx.shadowBlur = 24;
+        ctx.fillStyle = 'rgba(0,137,123,0.15)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (POINT_R + 8) * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#00897b';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (POINT_R + 2) * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (POINT_R + 2) * scale, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.shadowBlur = 0;
+      });
+    }
+
+    // ==================== UTILITY FUNCTIONS ====================
+    function bindBtn(id, fn){
+      const el = document.getElementById(id);
+      if(el) el.addEventListener('click', fn);
+    }
+
+    function setActive(id, active){
+      const el = document.getElementById(id);
+      if(el) el.classList.toggle('active', active);
+    }
+
+    function setText(id, text){
+      const el = document.getElementById(id);
+      if(el) el.textContent = text;
+    }
+
+    function setValue(id, value){
+      const el = document.getElementById(id);
+      if(el) el.value = value;
+    }
+
+    function val(id){
+      const el = document.getElementById(id);
+      return el ? el.value : '';
+    }
+
+    function openModal(id){
+      const el = document.getElementById(id);
+      if(el) el.classList.add('active');
+    }
+
+    function closeModal(id){
+      const el = document.getElementById(id);
+      if(el){
+        el.classList.remove('active');
+        
+        // If closing pipeline modal and we just drew a pipeline, stay in pipeline mode
+        if(id === 'pipelineModal' && mode === 'pipeline'){
+          // Re-disable map dragging for next draw
+          map.dragging.disable();
+          map.scrollWheelZoom.disable();
+        }
+      }
+    }
+
+    function toast(message){
+      const toastEl = document.getElementById('toast');
+      toastEl.textContent = message;
+      toastEl.style.display = 'block';
+      setTimeout(() => {
+        toastEl.style.display = 'none';
+      }, 3000);
+    }
+
+    function debounce(func, wait){
+      let timeout;
+      return function executedFunction(...args){
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    function eventToPixel(e){
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+
+    function pixelToLatLng(pixel){
+      const point = map.containerPointToLatLng([pixel.x, pixel.y]);
+      return {lat: point.lat, lng: point.lng};
+    }
+
+    function latLngToPixel(latLng){
+      const point = map.latLngToContainerPoint([latLng.lat, latLng.lng]);
+      return {x: point.x, y: point.y};
+    }
+
+    function distanceBetweenPixels(p1, p2){
+      return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    }
+
+    function distanceInPixels(latLng1, latLng2){
+      const p1 = latLngToPixel(latLng1);
+      const p2 = latLngToPixel(latLng2);
+      return distanceBetweenPixels(p1, p2);
+    }
+
+    function pointOnSegment(point, a, b, threshold){
+      const P = latLngToPixel(point);
+      const A = latLngToPixel(a);
+      const B = latLngToPixel(b);
+      
+      const APx = P.x - A.x;
+      const APy = P.y - A.y;
+      const ABx = B.x - A.x;
+      const ABy = B.y - A.y;
+      
+      const ab2 = ABx * ABx + ABy * ABy;
+      if(ab2 === 0) return distanceBetweenPixels(P, A) < threshold;
+      
+      let t = (APx * ABx + APy * ABy) / ab2;
+      t = Math.max(0, Math.min(1, t));
+      
+      const proj = {
+        x: A.x + ABx * t,
+        y: A.y + ABy * t
+      };
+      
+      return distanceBetweenPixels(P, proj) < threshold;
+    }
+
+    function isOnAnyPipeline(latLng, threshold){
+      for(let pipe of pipelines){
+        for(let i = 1; i < pipe.points.length; i++){
+          if(pointOnSegment(latLng, pipe.points[i - 1], pipe.points[i], threshold)){
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // ==================== EXPOSE GLOBAL FUNCTIONS ====================
+    window.map = map;
+    window.editTank = editTank;
+    window.editValve = editValve;
+    window.deleteTank = deleteTank;
+    window.deleteValve = deleteValve;
+    window.deletePipeline = deletePipeline;
+    window.editPipeline = editPipeline;
+    window.centerPipeline = centerPipeline;
+    window.viewTank = viewTank;
+    window.viewValve = viewValve;
+    window.viewDevice = viewDevice;
+    window.setValveFlow = setValveFlow;
+    window.exportData = exportData;
+    window.showHistory = showHistory;
+    window.searchByAreaAdvanced = searchByAreaAdvanced;
+    window.searchByDeviceId = searchByDeviceId;
+  </script>
+</body>
+</html>
