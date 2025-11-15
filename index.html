@@ -182,8 +182,25 @@
     .layer-option:hover{background:#f4f8ff}
     .layer-option.selected{background:#eef4ff;color:var(--primary);font-weight:600}
 
-    .pipeline-segment-hover{cursor:pointer;opacity:0.7}
-    .pipeline-segment-hover:hover{opacity:1}
+    .connection-status{
+      position:absolute;top:16px;right:16px;z-index:1100;background:var(--panel);
+      padding:8px 12px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);
+      display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
+    }
+    .connection-status.connected{color:var(--success)}
+    .connection-status.disconnected{color:var(--danger)}
+    .connection-status .dot{width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite}
+    .connection-status.connected .dot{background:var(--success)}
+    .connection-status.disconnected .dot{background:var(--danger)}
+
+    .loading-overlay{
+      position:fixed;inset:0;background:rgba(255,255,255,0.95);z-index:5000;
+      display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;
+    }
+    .loading-overlay.active{display:flex}
+    .spinner{width:48px;height:48px;border:4px solid var(--line);border-top-color:var(--primary);
+      border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
 
     .advanced-search{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
     .advanced-search .form-row{margin:0}
@@ -192,6 +209,16 @@
 <body>
   <div id="map"></div>
   <canvas id="canvas"></canvas>
+
+  <div class="connection-status" id="connectionStatus">
+    <div class="dot"></div>
+    <span id="statusText">Connecting...</span>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div style="font-weight:600;color:var(--text)">Loading Firebase Data...</div>
+  </div>
 
   <div class="toolbar">
     <button id="toolPipeline" class="tool-btn active" title="Draw pipeline"><i class="fas fa-drafting-compass"></i></button>
@@ -386,7 +413,28 @@
   <div id="toast" class="toast"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-  <script>
+  
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getDatabase, ref, set, get, update, remove, onValue, off, push } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+    
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDzG7ALtTD4NKHwFDj-sWJCdWvSOL-UphU",
+      authDomain: "chargekart-6b4b6.firebaseapp.com",
+      databaseURL: "https://chargekart-6b4b6-default-rtdb.asia-southeast1.firebasedatabase.app/",
+      projectId: "chargekart-6b4b6",
+      storageBucket: "chargekart-6b4b6.firebasestorage.app",
+      messagingSenderId: "142662338683",
+      appId: "1:142662338683:web:05887bc5252eb756fffade",
+      measurementId: "G-Q5XGRGDS5J"
+    };
+
+    // Initialize Firebase
+    const firebaseApp = initializeApp(firebaseConfig);
+    const db = getDatabase(firebaseApp);
+
     // ==================== DATA MODELS ====================
     class Tank {
       constructor(data){
@@ -403,7 +451,17 @@
         this.status = data.status || 'active';
         this.history = data.history || [];
         this.lastUpdate = data.lastUpdate || Date.now();
-        this.generateLiveData();
+        
+        // Live data from Firebase or generate if not present
+        if(data.waterLevel !== undefined){
+          this.waterLevel = data.waterLevel;
+          this.pressure = data.pressure;
+          this.flowRate = data.flowRate;
+          this.pH = data.pH;
+          this.temperature = data.temperature;
+        } else {
+          this.generateLiveData();
+        }
       }
       
       generateLiveData(){
@@ -431,6 +489,28 @@
       
       update(data){ Object.assign(this, data); }
       
+      toFirebase(){
+        return {
+          id: this.id,
+          name: this.name,
+          lat: this.lat,
+          lng: this.lng,
+          type: this.type,
+          capacity: this.capacity,
+          state: this.state,
+          district: this.district,
+          mandal: this.mandal,
+          habitation: this.habitation,
+          status: this.status,
+          waterLevel: this.waterLevel,
+          pressure: this.pressure,
+          flowRate: this.flowRate,
+          pH: this.pH,
+          temperature: this.temperature,
+          lastUpdate: this.lastUpdate
+        };
+      }
+      
       info(){
         return {
           id:this.id, name:this.name, type:this.type, capacity:`${this.capacity} L`,
@@ -457,7 +537,13 @@
         this.habitation = data.habitation || 'Ellishettypalle';
         this.history = data.history || [];
         this.lastUpdate = data.lastUpdate || Date.now();
-        this.generateLiveData();
+        
+        if(data.battery !== undefined){
+          this.battery = data.battery;
+          this.pressure = data.pressure;
+        } else {
+          this.generateLiveData();
+        }
       }
       
       generateLiveData(){
@@ -487,6 +573,25 @@
       
       update(data){ Object.assign(this, data); }
       
+      toFirebase(){
+        return {
+          id: this.id,
+          name: this.name,
+          lat: this.lat,
+          lng: this.lng,
+          type: this.type,
+          flowDirection: this.flowDirection,
+          valveState: this.valveState,
+          active: this.active,
+          status: this.status,
+          mandal: this.mandal,
+          habitation: this.habitation,
+          battery: this.battery,
+          pressure: this.pressure,
+          lastUpdate: this.lastUpdate
+        };
+      }
+      
       info(){
         return {
           id:this.id, name:this.name, type:this.type, flowDirection:this.flowDirection,
@@ -512,29 +617,173 @@
       }
       
       update(data){ Object.assign(this, data); }
+      
+      toFirebase(){
+        return {
+          id: this.id,
+          name: this.name,
+          type: this.type,
+          diameter: this.diameter,
+          capacity: this.capacity,
+          startPoint: this.startPoint,
+          endPoint: this.endPoint,
+          notes: this.notes,
+          points: this.points,
+          active: this.active
+        };
+      }
     }
 
-    // ==================== STORAGE ====================
-    const DataStore = {
-      save(){ 
+    // ==================== FIREBASE INTEGRATION ====================
+    const FirebaseService = {
+      listeners: [],
+      
+      async saveTank(tank){
         try{
-          const data = JSON.stringify({ 
-            tanks: tanks.map(t => ({...t})), 
-            valves: valves.map(v => ({...v})), 
-            pipelines: pipelines.map(p => ({...p})), 
-            ts: Date.now() 
-          });
-          localStorage.setItem('waterSystemPro', data);
-        }catch(e){ console.error('Save failed:', e); }
+          await set(ref(db, `tanks/${tank.id}`), tank.toFirebase());
+          return true;
+        } catch(error){
+          console.error('Error saving tank:', error);
+          toast('❌ Failed to save tank to Firebase');
+          return false;
+        }
       },
-      load(){ 
-        try{ 
-          return JSON.parse(localStorage.getItem('waterSystemPro')||'null'); 
-        }catch{ 
-          return null; 
-        } 
+      
+      async saveValve(valve){
+        try{
+          await set(ref(db, `valves/${valve.id}`), valve.toFirebase());
+          return true;
+        } catch(error){
+          console.error('Error saving valve:', error);
+          toast('❌ Failed to save valve to Firebase');
+          return false;
+        }
       },
-      clear(){ localStorage.removeItem('waterSystemPro'); }
+      
+      async savePipeline(pipeline){
+        try{
+          await set(ref(db, `pipelines/${pipeline.id}`), pipeline.toFirebase());
+          return true;
+        } catch(error){
+          console.error('Error saving pipeline:', error);
+          toast('❌ Failed to save pipeline to Firebase');
+          return false;
+        }
+      },
+      
+      async deleteTank(id){
+        try{
+          await remove(ref(db, `tanks/${id}`));
+          await remove(ref(db, `history/tanks/${id}`));
+          return true;
+        } catch(error){
+          console.error('Error deleting tank:', error);
+          return false;
+        }
+      },
+      
+      async deleteValve(id){
+        try{
+          await remove(ref(db, `valves/${id}`));
+          await remove(ref(db, `history/valves/${id}`));
+          return true;
+        } catch(error){
+          console.error('Error deleting valve:', error);
+          return false;
+        }
+      },
+      
+      async deletePipeline(id){
+        try{
+          await remove(ref(db, `pipelines/${id}`));
+          return true;
+        } catch(error){
+          console.error('Error deleting pipeline:', error);
+          return false;
+        }
+      },
+      
+      async saveHistory(deviceId, deviceType, record){
+        try{
+          const historyRef = ref(db, `history/${deviceType}/${deviceId}`);
+          await push(historyRef, record);
+          return true;
+        } catch(error){
+          console.error('Error saving history:', error);
+          return false;
+        }
+      },
+      
+      async loadHistory(deviceId, deviceType){
+        try{
+          const snapshot = await get(ref(db, `history/${deviceType}/${deviceId}`));
+          if(snapshot.exists()){
+            const data = snapshot.val();
+            return Object.values(data);
+          }
+          return [];
+        } catch(error){
+          console.error('Error loading history:', error);
+          return [];
+        }
+      },
+      
+      listenToTanks(callback){
+        const tanksRef = ref(db, 'tanks');
+        const listener = onValue(tanksRef, (snapshot) => {
+          const data = snapshot.val();
+          const tanks = data ? Object.values(data).map(t => new Tank(t)) : [];
+          callback(tanks);
+        }, (error) => {
+          console.error('Error listening to tanks:', error);
+          updateConnectionStatus(false);
+        });
+        this.listeners.push({ref: tanksRef, unsubscribe: () => off(tanksRef)});
+      },
+      
+      listenToValves(callback){
+        const valvesRef = ref(db, 'valves');
+        const listener = onValue(valvesRef, (snapshot) => {
+          const data = snapshot.val();
+          const valves = data ? Object.values(data).map(v => new Valve(v)) : [];
+          callback(valves);
+        }, (error) => {
+          console.error('Error listening to valves:', error);
+          updateConnectionStatus(false);
+        });
+        this.listeners.push({ref: valvesRef, unsubscribe: () => off(valvesRef)});
+      },
+      
+      listenToPipelines(callback){
+        const pipelinesRef = ref(db, 'pipelines');
+        const listener = onValue(pipelinesRef, (snapshot) => {
+          const data = snapshot.val();
+          const pipelines = data ? Object.values(data).map(p => new Pipeline(p)) : [];
+          callback(pipelines);
+        }, (error) => {
+          console.error('Error listening to pipelines:', error);
+          updateConnectionStatus(false);
+        });
+        this.listeners.push({ref: pipelinesRef, unsubscribe: () => off(pipelinesRef)});
+      },
+      
+      async clearAll(){
+        try{
+          await set(ref(db, 'tanks'), null);
+          await set(ref(db, 'valves'), null);
+          await set(ref(db, 'pipelines'), null);
+          await set(ref(db, 'history'), null);
+          return true;
+        } catch(error){
+          console.error('Error clearing data:', error);
+          return false;
+        }
+      },
+      
+      detachListeners(){
+        this.listeners.forEach(l => l.unsubscribe());
+        this.listeners = [];
+      }
     };
 
     // ==================== GLOBAL STATE ====================
@@ -548,22 +797,142 @@
     let layers = {};
     let eraseMode = false;
     let dataCollectionInterval = null;
+    let isFirebaseConnected = false;
 
     const POINT_R = 10;
     const LINE_W = 4;
     const CONNECT_THRESH = 18;
     const CLICK_DETECT_RADIUS = 15;
-    const DATA_COLLECTION_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    const DATA_COLLECTION_INTERVAL = 5 * 60 * 1000;
+
+    // ==================== CONNECTION STATUS ====================
+    function updateConnectionStatus(connected){
+      isFirebaseConnected = connected;
+      const statusEl = document.getElementById('connectionStatus');
+      const textEl = document.getElementById('statusText');
+      
+      if(connected){
+        statusEl.className = 'connection-status connected';
+        textEl.textContent = 'Connected';
+      } else {
+        statusEl.className = 'connection-status disconnected';
+        textEl.textContent = 'Disconnected';
+      }
+    }
+
+    function showLoading(show){
+      const overlay = document.getElementById('loadingOverlay');
+      if(show){
+        overlay.classList.add('active');
+      } else {
+        overlay.classList.remove('active');
+      }
+    }
 
     // ==================== INITIALIZATION ====================
-    document.addEventListener('DOMContentLoaded', () => {
+    async function initializeWaterApp(){
+      showLoading(true);
+      updateConnectionStatus(false);
+      
       initMap();
       initCanvas();
       initUI();
-      loadData();
+      
+      // Setup Firebase listeners
+      FirebaseService.listenToTanks((loadedTanks) => {
+        tanks = loadedTanks;
+        drawCanvas();
+        updateConnectionStatus(true);
+        
+        // Load history for each tank
+        tanks.forEach(async (tank) => {
+          tank.history = await FirebaseService.loadHistory(tank.id, 'tanks');
+        });
+      });
+      
+      FirebaseService.listenToValves((loadedValves) => {
+        valves = loadedValves;
+        drawCanvas();
+        updateConnectionStatus(true);
+        
+        // Load history for each valve
+        valves.forEach(async (valve) => {
+          valve.history = await FirebaseService.loadHistory(valve.id, 'valves');
+        });
+      });
+      
+      FirebaseService.listenToPipelines((loadedPipelines) => {
+        pipelines = loadedPipelines;
+        drawCanvas();
+        updateConnectionStatus(true);
+      });
+      
+      // Initialize dummy data if Firebase is empty
+      setTimeout(async () => {
+        if(tanks.length === 0 && valves.length === 0 && pipelines.length === 0){
+          await initializeDummyData();
+        }
+        showLoading(false);
+      }, 2000);
+      
       startAnimationLoop();
       startDataCollection();
-    });
+    }
+
+    async function initializeDummyData(){
+      toast('📦 No data found. Creating dummy data for demo...');
+      
+      // Create dummy tank
+      const dummyTank = new Tank({
+        id: 'TANK-DEMO-001',
+        name: 'Demo OHSR Tank',
+        lat: 17.9689,
+        lng: 79.5941,
+        type: 'OHSR',
+        capacity: 25000,
+        state: 'Telangana',
+        district: 'Mulugu',
+        mandal: 'Eturunagaram',
+        habitation: 'Demo Area'
+      });
+      
+      await FirebaseService.saveTank(dummyTank);
+      
+      // Create dummy valve
+      const dummyValve = new Valve({
+        id: 'VALVE-DEMO-001',
+        name: 'Demo Gate Valve',
+        lat: 17.9700,
+        lng: 79.5950,
+        type: 'STRAIGHT',
+        mandal: 'Eturunagaram',
+        habitation: 'Demo Area'
+      });
+      
+      await FirebaseService.saveValve(dummyValve);
+      
+      // Create dummy pipeline
+      const dummyPipeline = new Pipeline({
+        id: 'PIPE-DEMO-001',
+        name: 'Demo Supply Line',
+        type: 'PVC',
+        diameter: 150,
+        capacity: 500,
+        startPoint: 'Demo Tank',
+        endPoint: 'Demo Distribution Point',
+        points: [
+          {lat: 17.9689, lng: 79.5941},
+          {lat: 17.9695, lng: 79.5945},
+          {lat: 17.9700, lng: 79.5950}
+        ]
+      });
+      
+      await FirebaseService.savePipeline(dummyPipeline);
+      
+      toast('✓ Dummy data created successfully!');
+    }
+
+    document.addEventListener('DOMContentLoaded', initializeWaterApp);
 
     function initMap(){
       map = L.map('map', {
@@ -719,16 +1088,45 @@
     }
 
     function startDataCollection(){
-      dataCollectionInterval = setInterval(()=>{
-        tanks.forEach(t => {
-          t.generateLiveData();
-          t.recordHistory();
-        });
-        valves.forEach(v => {
-          v.generateLiveData();
-          v.recordHistory();
-        });
-        DataStore.save();
+      dataCollectionInterval = setInterval(async ()=>{
+        for(const tank of tanks){
+          tank.generateLiveData();
+          tank.recordHistory();
+          
+          // Save live data to Firebase
+          await FirebaseService.saveTank(tank);
+          
+          // Save history record
+          const record = {
+            timestamp: Date.now(),
+            waterLevel: tank.waterLevel,
+            pressure: tank.pressure,
+            flowRate: tank.flowRate,
+            pH: tank.pH,
+            temperature: tank.temperature,
+            status: tank.status
+          };
+          await FirebaseService.saveHistory(tank.id, 'tanks', record);
+        }
+        
+        for(const valve of valves){
+          valve.generateLiveData();
+          valve.recordHistory();
+          
+          // Save live data to Firebase
+          await FirebaseService.saveValve(valve);
+          
+          // Save history record
+          const record = {
+            timestamp: Date.now(),
+            battery: valve.battery,
+            pressure: valve.pressure,
+            valveState: valve.valveState,
+            active: valve.active,
+            status: valve.status
+          };
+          await FirebaseService.saveHistory(valve.id, 'valves', record);
+        }
       }, DATA_COLLECTION_INTERVAL);
     }
 
@@ -738,7 +1136,6 @@
       eraseMode = (m === 'erase');
       updateToolbar();
       
-      // Enable/disable canvas and map interactions based on mode
       if(m === 'pipeline'){
         canvas.classList.add('active');
         canvas.classList.remove('drawing');
@@ -775,6 +1172,11 @@
     function onMapClick(e){
       const latLng = e.latlng;
       
+      // Don't handle clicks in erase mode (handled by canvas)
+      if(mode === 'erase'){
+        return;
+      }
+      
       const clickedTank = tanks.find(t => distanceInPixels(t, latLng) < CLICK_DETECT_RADIUS);
       if(clickedTank){
         showDevice(clickedTank, 'tank');
@@ -784,11 +1186,6 @@
       const clickedValve = valves.find(v => distanceInPixels(v, latLng) < CLICK_DETECT_RADIUS);
       if(clickedValve){
         showDevice(clickedValve, 'valve');
-        return;
-      }
-
-      if(mode === 'erase'){
-        eraseSegmentAtPoint(latLng);
         return;
       }
 
@@ -825,32 +1222,112 @@
       toast('📍 Coordinates filled');
     }
 
-    function eraseSegmentAtPoint(latLng){
+    async function eraseSegmentAtPoint(latLng){
+      let foundSegment = false;
+      
       for(let i = 0; i < pipelines.length; i++){
         const pipe = pipelines[i];
         for(let j = 0; j < pipe.points.length - 1; j++){
-          if(pointOnSegment(latLng, pipe.points[j], pipe.points[j+1], 15)){
-            if(confirm(`Erase segment from ${pipe.name}?\n\nThis will split the pipeline at this point.`)){
-              const remaining = pipe.points.slice(0, j+1);
+          if(pointOnSegment(latLng, pipe.points[j], pipe.points[j+1], 20)){
+            foundSegment = true;
+            
+            // Show confirmation dialog
+            const pipelineName = pipe.name || `Pipeline ${i + 1}`;
+            const action = await new Promise(resolve => {
+              const modal = document.createElement('div');
+              modal.className = 'modal active';
+              modal.innerHTML = `
+                <div class="modal-content" style="max-width:500px">
+                  <div class="modal-header">
+                    <h3>Erase Pipeline Segment</h3>
+                  </div>
+                  <div class="modal-body">
+                    <p style="margin-bottom:16px;font-size:14px">
+                      <strong>Pipeline:</strong> ${pipelineName}<br>
+                      <strong>Segment:</strong> ${j + 1} of ${pipe.points.length - 1}
+                    </p>
+                    <p style="margin-bottom:16px;font-size:13px;color:var(--muted)">
+                      Choose an action:
+                    </p>
+                    <button class="btn danger" id="eraseSegmentBtn" style="margin-bottom:8px">
+                      <i class="fas fa-cut"></i> Split Pipeline Here
+                      <div style="font-size:11px;font-weight:400;margin-top:4px">Keep segments before this point</div>
+                    </button>
+                    <button class="btn danger" id="deleteEntireBtn" style="margin-bottom:8px">
+                      <i class="fas fa-trash"></i> Delete Entire Pipeline
+                      <div style="font-size:11px;font-weight:400;margin-top:4px">Remove all segments</div>
+                    </button>
+                    <button class="btn" id="cancelEraseBtn">
+                      <i class="fas fa-times"></i> Cancel
+                    </button>
+                  </div>
+                </div>
+              `;
+              
+              document.body.appendChild(modal);
+              
+              document.getElementById('eraseSegmentBtn').onclick = () => {
+                document.body.removeChild(modal);
+                resolve('split');
+              };
+              
+              document.getElementById('deleteEntireBtn').onclick = () => {
+                document.body.removeChild(modal);
+                resolve('delete');
+              };
+              
+              document.getElementById('cancelEraseBtn').onclick = () => {
+                document.body.removeChild(modal);
+                resolve('cancel');
+              };
+              
+              modal.onclick = (e) => {
+                if(e.target === modal){
+                  document.body.removeChild(modal);
+                  resolve('cancel');
+                }
+              };
+            });
+            
+            if(action === 'split'){
+              const remaining = pipe.points.slice(0, j + 1);
               if(remaining.length > 1){
                 pipe.points = remaining;
                 pipe.update({points: remaining});
+                await FirebaseService.savePipeline(pipe);
+                toast('✓ Pipeline split - segments after click point removed');
               } else {
-                pipelines.splice(i, 1);
+                await FirebaseService.deletePipeline(pipe.id);
+                toast('✓ Pipeline deleted - too short after split');
               }
-              DataStore.save();
-              drawCanvas();
-              toast('✓ Segment erased');
+            } else if(action === 'delete'){
+              await FirebaseService.deletePipeline(pipe.id);
+              toast('✓ Entire pipeline deleted from Firebase');
+            } else {
+              toast('❌ Erase cancelled');
             }
+            
+            drawCanvas();
             return;
           }
         }
       }
-      toast('⚠️ Click on a pipeline segment to erase');
+      
+      if(!foundSegment){
+        toast('⚠️ Click on a pipeline segment to erase');
+      }
     }
 
     // ==================== CANVAS DRAWING ====================
     function handleCanvasMouseDown(e){
+      if(mode === 'erase'){
+        e.preventDefault();
+        e.stopPropagation();
+        const latLng = pixelToLatLng(eventToPixel(e));
+        eraseSegmentAtPoint(latLng);
+        return;
+      }
+      
       if(mode !== 'pipeline') return;
       
       e.preventDefault();
@@ -860,8 +1337,6 @@
       isDrawing = true;
       currentPipeline = [latLng];
       canvas.classList.add('drawing');
-      
-      console.log('Started drawing pipeline at:', latLng);
     }
 
     function handleCanvasMouseMove(e){
@@ -879,12 +1354,34 @@
       } else {
         const hoveredTank = tanks.find(t => distanceInPixels(t, latLng) < CLICK_DETECT_RADIUS);
         const hoveredValve = valves.find(v => distanceInPixels(v, latLng) < CLICK_DETECT_RADIUS);
+        
+        // Check if hovering over a pipeline segment in erase mode
+        let hoveredPipeline = null;
+        if(mode === 'erase'){
+          for(let i = 0; i < pipelines.length; i++){
+            const pipe = pipelines[i];
+            for(let j = 0; j < pipe.points.length - 1; j++){
+              if(pointOnSegment(latLng, pipe.points[j], pipe.points[j+1], 20)){
+                hoveredPipeline = {pipe, segmentIndex: j};
+                break;
+              }
+            }
+            if(hoveredPipeline) break;
+          }
+        }
+        
         hoveredDevice = hoveredTank ? {type:'tank', device:hoveredTank} : 
-                        hoveredValve ? {type:'valve', device:hoveredValve} : null;
+                        hoveredValve ? {type:'valve', device:hoveredValve} : 
+                        hoveredPipeline ? {type:'pipeline', data:hoveredPipeline} : null;
+        
+        // Update cursor for erase mode
+        if(mode === 'erase'){
+          canvas.style.cursor = hoveredPipeline ? 'crosshair' : 'not-allowed';
+        }
       }
     }
 
-    function handleCanvasMouseUp(e){
+    async function handleCanvasMouseUp(e){
       if(!isDrawing) return;
       
       e.preventDefault();
@@ -892,8 +1389,7 @@
       
       if(currentPipeline.length > 5){
         const newPipe = new Pipeline({points: currentPipeline});
-        pipelines.push(newPipe);
-        console.log('Pipeline created:', newPipe);
+        await FirebaseService.savePipeline(newPipe);
         toast('✓ Pipeline created! Fill in details.');
         openPipelineDetailsModal(newPipe.id);
       } else {
@@ -904,7 +1400,6 @@
       isDrawing = false;
       canvas.classList.remove('drawing');
       
-      // Re-enable map controls after drawing
       map.dragging.enable();
       map.scrollWheelZoom.enable();
       
@@ -926,7 +1421,7 @@
       document.getElementById('pipelineModal').setAttribute('data-pipe-id', pipeId);
     }
 
-    function onSavePipeline(){
+    async function onSavePipeline(){
       const pipeId = document.getElementById('pipelineModal').getAttribute('data-pipe-id');
       const pipe = pipelines.find(p => p.id === pipeId);
       if(!pipe) return;
@@ -945,12 +1440,11 @@
       }
 
       pipe.update({name, type, diameter, capacity, startPoint, endPoint, notes});
-      DataStore.save();
+      await FirebaseService.savePipeline(pipe);
       closeModal('pipelineModal');
-      toast('✓ Pipeline saved');
+      toast('✓ Pipeline saved to Firebase');
       drawCanvas();
       
-      // Switch back to pipeline mode for next draw
       setMode('pipeline');
     }
 
@@ -1098,7 +1592,7 @@
       let html = '';
 
       if(devices.length > 0){
-        html += '<div class="suggest-item header">DEVICES</div>';
+        html += '<div class="suggest-item header">DEVICES (FROM FIREBASE)</div>';
         devices.forEach(d => {
           const icon = d.type === 'tank' ? 'fa-database' : 'fa-cog';
           const color = d.type === 'tank' ? '#00897b' : '#6a1b9a';
@@ -1201,7 +1695,7 @@
     function showLoadingSuggestions(){
       const holder = document.getElementById('suggestions');
       const list = document.getElementById('suggestList');
-      list.innerHTML = '<div class="suggest-item" style="text-align:center"><i class="fas fa-spinner fa-spin"></i> Searching...</div>';
+      list.innerHTML = '<div class="suggest-item" style="text-align:center"><i class="fas fa-spinner fa-spin"></i> Searching Firebase...</div>';
       holder.style.display = 'block';
     }
 
@@ -1216,10 +1710,8 @@
         return;
       }
 
-      // Exact ID match
       let device = [...tanks, ...valves].find(d => d.id.toLowerCase() === query);
       
-      // Fuzzy name/ID match
       if(!device){
         const matches = [...tanks, ...valves].filter(d => 
           fuzzyMatch(query, d.name) > 70 || fuzzyMatch(query, d.id) > 70
@@ -1243,9 +1735,8 @@
         return;
       }
 
-      // Trigger suggestion search
       onSearchInput();
-      toast('🔍 Searching...');
+      toast('🔍 Searching Firebase...');
     }
 
     // ==================== CRUD OPERATIONS ====================
@@ -1260,7 +1751,7 @@
       return null;
     }
 
-    function onSaveTank(){
+    async function onSaveTank(){
       const id = val('tankId').trim();
       const name = val('tankName').trim();
       const type = val('tankType');
@@ -1289,24 +1780,24 @@
         const tank = tanks.find(t => t.id === editingId);
         if(tank){
           tank.update({id, name, type, capacity, state, district, mandal, habitation, lat, lng});
-          toast('✓ Tank updated');
+          await FirebaseService.saveTank(tank);
+          toast('✓ Tank updated in Firebase');
         }
       } else {
         const tank = new Tank({id, name, type, capacity, state, district, mandal, habitation, lat, lng});
         tank.recordHistory();
-        tanks.push(tank);
-        toast('✓ Tank added');
+        await FirebaseService.saveTank(tank);
+        toast('✓ Tank added to Firebase');
       }
 
       document.getElementById('tankModal').removeAttribute('data-edit-id');
       document.getElementById('tankIdError').textContent = '';
-      DataStore.save();
       closeModal('tankModal');
       drawCanvas();
       setMode('pipeline');
     }
 
-    function onSaveValve(){
+    async function onSaveValve(){
       const id = val('valveId').trim();
       const name = val('valveName').trim();
       const type = val('valveType');
@@ -1332,7 +1823,8 @@
         const valve = valves.find(v => v.id === editingId);
         if(valve){
           valve.update({id, name, type, mandal, habitation, lat, lng});
-          toast('✓ Valve updated');
+          await FirebaseService.saveValve(valve);
+          toast('✓ Valve updated in Firebase');
         }
       } else {
         if(!isOnAnyPipeline({lat, lng}, 20)){
@@ -1341,13 +1833,12 @@
         }
         const valve = new Valve({id, name, type, mandal, habitation, lat, lng});
         valve.recordHistory();
-        valves.push(valve);
-        toast('✓ Valve added');
+        await FirebaseService.saveValve(valve);
+        toast('✓ Valve added to Firebase');
       }
 
       document.getElementById('valveModal').removeAttribute('data-edit-id');
       document.getElementById('valveIdError').textContent = '';
-      DataStore.save();
       closeModal('valveModal');
       drawCanvas();
     }
@@ -1391,44 +1882,44 @@
       document.getElementById('valveIdError').textContent = '';
     }
 
-    function deleteTank(id){
-      if(!confirm('Delete this tank? This action cannot be undone.')){
+    async function deleteTank(id){
+      if(!confirm('Delete this tank from Firebase? This action cannot be undone.')){
         return;
       }
-      tanks = tanks.filter(t => t.id !== id);
-      DataStore.save();
+      
+      await FirebaseService.deleteTank(id);
       closeSidebar();
       drawCanvas();
-      toast('✓ Tank deleted');
+      toast('✓ Tank deleted from Firebase');
+      
       if(document.getElementById('manageModal').classList.contains('active')){
         renderManage('tanks');
       }
     }
 
-    function deleteValve(id){
-      if(!confirm('Delete this valve? This action cannot be undone.')){
+    async function deleteValve(id){
+      if(!confirm('Delete this valve from Firebase? This action cannot be undone.')){
         return;
       }
-      valves = valves.filter(v => v.id !== id);
-      DataStore.save();
+      
+      await FirebaseService.deleteValve(id);
       closeSidebar();
       drawCanvas();
-      toast('✓ Valve deleted');
+      toast('✓ Valve deleted from Firebase');
+      
       if(document.getElementById('manageModal').classList.contains('active')){
         renderManage('valves');
       }
     }
 
-    function deletePipeline(id){
-      const index = pipelines.findIndex(p => p.id === id);
-      if(index < 0) return;
-      if(!confirm('Delete this pipeline? This action cannot be undone.')){
+    async function deletePipeline(id){
+      if(!confirm('Delete this pipeline from Firebase? This action cannot be undone.')){
         return;
       }
-      pipelines.splice(index, 1);
-      DataStore.save();
+      
+      await FirebaseService.deletePipeline(id);
       drawCanvas();
-      toast('✓ Pipeline deleted');
+      toast('✓ Pipeline deleted from Firebase');
       renderManage('pipelines');
     }
 
@@ -1444,19 +1935,21 @@
       closeModal('manageModal');
     }
 
-    function clearAll(){
-      if(!confirm('⚠️ Clear ALL tanks, valves, and pipelines? This cannot be undone!')){
+    async function clearAll(){
+      if(!confirm('⚠️ Clear ALL tanks, valves, and pipelines from Firebase? This cannot be undone!')){
         return;
       }
-      tanks = [];
-      valves = [];
-      pipelines = [];
+      
+      showLoading(true);
+      await FirebaseService.clearAll();
+      
       isDrawing = false;
       currentPipeline = [];
-      DataStore.clear();
       closeSidebar();
       drawCanvas();
-      toast('✓ All data cleared');
+      
+      showLoading(false);
+      toast('✓ All data cleared from Firebase');
     }
 
     // ==================== MANAGE MODAL ====================
@@ -1472,7 +1965,7 @@
       
       if(tab === 'tanks'){
         if(tanks.length === 0){
-          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No tanks yet</div></div>';
+          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No tanks in Firebase</div><div style="font-size:11px;margin-top:8px">Add tanks to see them here</div></div>';
           return;
         }
         
@@ -1492,7 +1985,7 @@
         
       } else if(tab === 'valves'){
         if(valves.length === 0){
-          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No valves yet</div></div>';
+          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No valves in Firebase</div><div style="font-size:11px;margin-top:8px">Add valves to see them here</div></div>';
           return;
         }
         
@@ -1512,7 +2005,7 @@
         
       } else if(tab === 'pipelines'){
         if(pipelines.length === 0){
-          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No pipelines yet</div></div>';
+          content.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:12px;opacity:0.3"></i><div>No pipelines in Firebase</div><div style="font-size:11px;margin-top:8px">Draw pipelines to see them here</div></div>';
           return;
         }
         
@@ -1552,7 +2045,7 @@
                 <input id="searchHabitation" placeholder="e.g., Ellishettypalle"/>
               </div>
             </div>
-            <button class="btn primary" onclick="searchByAreaAdvanced()"><i class="fas fa-search"></i> Search by Area</button>
+            <button class="btn primary" onclick="searchByAreaAdvanced()"><i class="fas fa-search"></i> Search Firebase</button>
           </div>
           <div class="card">
             <h4><i class="fas fa-hashtag"></i> SEARCH BY DEVICE ID</h4>
@@ -1567,13 +2060,19 @@
       } else if(tab === 'data'){
         content.innerHTML = `
           <div class="card">
+            <h4><i class="fas fa-cloud"></i> FIREBASE STATUS</h4>
+            <div class="row"><span class="label">Connection</span><span class="value" style="color:${isFirebaseConnected ? 'var(--success)' : 'var(--danger)'}">${isFirebaseConnected ? 'Connected' : 'Disconnected'}</span></div>
+            <div class="row"><span class="label">Database</span><span class="value">Realtime Database</span></div>
+            <div class="row"><span class="label">Project</span><span class="value">chargekart-6b4b6</span></div>
+          </div>
+          <div class="card">
             <h4><i class="fas fa-file-export"></i> EXPORT DATA</h4>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Download all tanks, valves, and pipelines as JSON</p>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Download all data from Firebase as JSON</p>
             <button class="btn success" onclick="exportData()"><i class="fas fa-download"></i> Export JSON</button>
           </div>
           <div class="card">
             <h4><i class="fas fa-file-import"></i> IMPORT DATA</h4>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Load data from a JSON file</p>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Load data from JSON file to Firebase</p>
             <button class="btn primary" onclick="document.getElementById('importFile').click()"><i class="fas fa-upload"></i> Import JSON</button>
           </div>
           <div class="card">
@@ -1628,16 +2127,16 @@
         map.setView([device.lat, device.lng], 17);
         const type = tanks.includes(device) ? 'tank' : 'valve';
         showDevice(device, type);
-        toast('✓ Device found');
+        toast('✓ Device found in Firebase');
       } else {
         const results = [...tanks, ...valves].filter(d => 
           d.id.toLowerCase().includes(id.toLowerCase())
         );
         if(results.length > 0){
           displaySearchResults(results);
-          toast(`Found ${results.length} similar device(s)`);
+          toast(`Found ${results.length} similar device(s) in Firebase`);
         } else {
-          toast('❌ Device not found');
+          toast('❌ Device not found in Firebase');
         }
       }
     }
@@ -1645,7 +2144,7 @@
     function displaySearchResults(results){
       const container = document.getElementById('searchResults');
       if(results.length === 0){
-        container.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)">No devices found matching your criteria</div>';
+        container.innerHTML = '<div class="card" style="text-align:center;color:var(--muted)">No devices found in Firebase matching your criteria</div>';
         return;
       }
 
@@ -1694,72 +2193,104 @@
     }
 
     // ==================== IMPORT/EXPORT ====================
-    function exportData(){
+    async function exportData(){
       const data = {
-        tanks: tanks.map(t => ({...t})),
-        valves: valves.map(v => ({...v})),
-        pipelines: pipelines.map(p => ({...p})),
-        version: '2.0',
+        tanks: tanks.map(t => t.toFirebase()),
+        valves: valves.map(v => v.toFirebase()),
+        pipelines: pipelines.map(p => p.toFirebase()),
+        version: '2.0-firebase',
         timestamp: Date.now(),
-        exportDate: new Date().toISOString()
+        exportDate: new Date().toISOString(),
+        source: 'Firebase Realtime Database'
       };
       
       const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `water-system-pro-${Date.now()}.json`;
+      a.download = `water-system-firebase-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast('✓ Data exported');
+      toast('✓ Data exported from Firebase');
     }
 
-    function importData(e){
+    async function importData(e){
       const file = e.target.files[0];
       if(!file) return;
       
+      showLoading(true);
       const reader = new FileReader();
-      reader.onload = ()=>{
+      
+      reader.onload = async ()=>{
         try{
           const data = JSON.parse(reader.result);
-          tanks = (data.tanks || []).map(t => new Tank(t));
-          valves = (data.valves || []).map(v => new Valve(v));
-          pipelines = (data.pipelines || []).map(p => new Pipeline(p));
-          DataStore.save();
+          
+          // Import tanks
+          if(data.tanks && Array.isArray(data.tanks)){
+            for(const tankData of data.tanks){
+              const tank = new Tank(tankData);
+              await FirebaseService.saveTank(tank);
+            }
+          }
+          
+          // Import valves
+          if(data.valves && Array.isArray(data.valves)){
+            for(const valveData of data.valves){
+              const valve = new Valve(valveData);
+              await FirebaseService.saveValve(valve);
+            }
+          }
+          
+          // Import pipelines
+          if(data.pipelines && Array.isArray(data.pipelines)){
+            for(const pipelineData of data.pipelines){
+              const pipeline = new Pipeline(pipelineData);
+              await FirebaseService.savePipeline(pipeline);
+            }
+          }
+          
+          showLoading(false);
           drawCanvas();
-          toast('✓ Data imported successfully');
+          toast('✓ Data imported to Firebase successfully');
+          
           if(document.getElementById('manageModal').classList.contains('active')){
             renderManage('data');
           }
         } catch(error){
           console.error('Import error:', error);
-          toast('⚠️ Invalid JSON file');
+          showLoading(false);
+          toast('⚠️ Invalid JSON file or import failed');
         }
       };
+      
       reader.readAsText(file);
       e.target.value = '';
     }
 
-    function loadData(){
-      const data = DataStore.load();
-      if(!data) return;
-      
-      tanks = (data.tanks || []).map(t => new Tank(t));
-      valves = (data.valves || []).map(v => new Valve(v));
-      pipelines = (data.pipelines || []).map(p => new Pipeline(p));
-      drawCanvas();
-      toast('✓ Session restored');
-    }
-
     // ==================== SIDEBAR & HISTORY ====================
-    function showDevice(device, type){
+    async function showDevice(device, type){
       const sidebar = document.getElementById('sidebar');
       const body = document.getElementById('sidebarBody');
       
       setText('sidebarTitle', `${type === 'tank' ? '🗄️ Tank' : '⚙️ Valve'}: ${device.name}`);
       
+      // Load history from Firebase
+      device.history = await FirebaseService.loadHistory(device.id, type === 'tank' ? 'tanks' : 'valves');
+      
       if(type === 'tank'){
         const info = device.info();
+        
+        // Find connected pipelines
+        const connectedPipelines = [];
+        pipelines.forEach(pipe => {
+          for(let i = 0; i < pipe.points.length - 1; i++){
+            if(pointOnSegment(device, pipe.points[i], pipe.points[i+1], 20)){
+              connectedPipelines.push(pipe);
+              break;
+            }
+          }
+        });
+        
         body.innerHTML = `
           <div class="card">
             <h4><i class="fas fa-info-circle"></i> DETAILS</h4>
@@ -1769,13 +2300,45 @@
             <div class="row"><span class="label">Status</span><span class="value" style="color:var(--success)">${info.status.toUpperCase()}</span></div>
           </div>
           <div class="card">
-            <h4><i class="fas fa-chart-line"></i> LIVE METRICS <span class="live-indicator"></span></h4>
+            <h4><i class="fas fa-chart-line"></i> LIVE METRICS (FIREBASE) <span class="live-indicator"></span></h4>
             <div class="row"><span class="label">Water level</span><span class="value">${info.waterLevel}</span></div>
             <div class="row"><span class="label">Pressure</span><span class="value">${info.pressure}</span></div>
             <div class="row"><span class="label">Flow rate</span><span class="value">${info.flowRate}</span></div>
             <div class="row"><span class="label">pH</span><span class="value">${info.pH}</span></div>
             <div class="row"><span class="label">Temperature</span><span class="value">${info.temperature}</span></div>
             <div class="row"><span class="label">Last update</span><span class="value">${new Date(device.lastUpdate).toLocaleTimeString()}</span></div>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-water"></i> CONNECTED PIPELINES (${connectedPipelines.length})</h4>
+            ${connectedPipelines.length > 0 ? connectedPipelines.map(pipe => {
+              const hasFlow = pipe.currentFlow > 0;
+              const flowPercentage = pipe.capacity > 0 ? ((pipe.currentFlow / pipe.capacity) * 100).toFixed(0) : 0;
+              return `
+                <div class="row" style="border:1px solid ${hasFlow ? '#e3f2fd' : '#ffebee'};border-radius:8px;padding:10px;margin-top:8px;background:${hasFlow ? '#f1f8ff' : '#fff5f5'}">
+                  <div style="flex:1">
+                    <div style="font-weight:600;color:var(--text);margin-bottom:4px">
+                      <i class="fas fa-pipe" style="color:${hasFlow ? '#1e88e5' : '#d32f2f'}"></i>
+                      ${pipe.name}
+                    </div>
+                    <div style="font-size:11px;color:var(--muted)">
+                      ${pipe.type} • ${pipe.diameter}mm • ${pipe.capacity}L/min capacity
+                    </div>
+                    <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+                      <div style="flex:1;height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden">
+                        <div style="width:${flowPercentage}%;height:100%;background:${hasFlow ? '#1e88e5' : '#d32f2f'};transition:width 0.3s"></div>
+                      </div>
+                      <span style="font-size:11px;font-weight:600;color:${hasFlow ? '#1e88e5' : '#d32f2f'}">${flowPercentage}%</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:80px">
+                    <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Flow</div>
+                    <div style="font-size:16px;font-weight:700;color:${hasFlow ? 'var(--success)' : 'var(--danger)'}">${pipe.currentFlow.toFixed(0)}</div>
+                    <div style="font-size:10px;color:var(--muted)">L/min</div>
+                    ${hasFlow ? '<span style="font-size:10px;color:var(--success);margin-top:2px">✓ FLOWING</span>' : '<span style="font-size:10px;color:var(--danger);margin-top:2px">✗ BLOCKED</span>'}
+                  </div>
+                </div>
+              `;
+            }).join('') : '<div style="text-align:center;padding:12px;color:var(--muted);font-size:12px">No pipelines connected to this tank</div>'}
           </div>
           <div class="card">
             <h4><i class="fas fa-map-marker-alt"></i> LOCATION</h4>
@@ -1787,18 +2350,22 @@
             <button class="btn primary" onclick="map.setView([${device.lat},${device.lng}],18)"><i class="fas fa-crosshairs"></i> Center on Map</button>
           </div>
           <div class="card">
-            <h4><i class="fas fa-history"></i> HISTORY</h4>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">${device.history.length} records collected</p>
+            <h4><i class="fas fa-history"></i> HISTORY (FIREBASE)</h4>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">${device.history.length} records in Firebase</p>
             <button class="btn primary" onclick="showHistory('${device.id}', 'tank')"><i class="fas fa-table"></i> View Full History</button>
           </div>
           <div class="card">
             <h4><i class="fas fa-tools"></i> ACTIONS</h4>
             <button class="btn" onclick="editTank('${device.id}')"><i class="fas fa-pen"></i> Edit Tank</button>
-            <button class="btn danger" onclick="deleteTank('${device.id}')"><i class="fas fa-trash"></i> Delete Tank</button>
+            <button class="btn danger" onclick="deleteTank('${device.id}')"><i class="fas fa-trash"></i> Delete from Firebase</button>
           </div>
         `;
       } else {
         const info = device.info();
+        
+        // Find affected pipelines
+        const affectedPipelines = findAffectedPipelines(device);
+        
         body.innerHTML = `
           <div class="card">
             <h4><i class="fas fa-info-circle"></i> DETAILS</h4>
@@ -1809,10 +2376,43 @@
             <div class="row"><span class="label">Status</span><span class="value">${info.status.toUpperCase()}</span></div>
           </div>
           <div class="card">
-            <h4><i class="fas fa-chart-line"></i> LIVE SENSORS <span class="live-indicator"></span></h4>
+            <h4><i class="fas fa-chart-line"></i> LIVE SENSORS (FIREBASE) <span class="live-indicator"></span></h4>
             <div class="row"><span class="label">Battery</span><span class="value">${info.battery}</span></div>
             <div class="row"><span class="label">Pressure</span><span class="value">${info.pressure}</span></div>
             <div class="row"><span class="label">Last update</span><span class="value">${new Date(device.lastUpdate).toLocaleTimeString()}</span></div>
+          </div>
+          <div class="card">
+            <h4><i class="fas fa-water"></i> AFFECTED PIPELINES (${affectedPipelines.length})</h4>
+            ${affectedPipelines.length > 0 ? affectedPipelines.map(pipe => {
+              const hasFlow = pipe.currentFlow > 0;
+              const isBlocked = device.active;
+              const flowPercentage = pipe.capacity > 0 ? ((pipe.currentFlow / pipe.capacity) * 100).toFixed(0) : 0;
+              return `
+                <div class="row" style="border:1px solid ${hasFlow ? '#e3f2fd' : '#ffebee'};border-radius:8px;padding:10px;margin-top:8px;background:${hasFlow ? '#f1f8ff' : '#fff5f5'}">
+                  <div style="flex:1">
+                    <div style="font-weight:600;color:var(--text);margin-bottom:4px">
+                      <i class="fas fa-pipe" style="color:${hasFlow ? '#1e88e5' : '#d32f2f'}"></i>
+                      ${pipe.name}
+                    </div>
+                    <div style="font-size:11px;color:var(--muted)">
+                      ${pipe.type} • ${pipe.diameter}mm • ${pipe.capacity}L/min capacity
+                    </div>
+                    <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+                      <div style="flex:1;height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden">
+                        <div style="width:${flowPercentage}%;height:100%;background:${hasFlow ? '#1e88e5' : '#d32f2f'};transition:width 0.3s"></div>
+                      </div>
+                      <span style="font-size:11px;font-weight:600;color:${hasFlow ? '#1e88e5' : '#d32f2f'}">${flowPercentage}%</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:80px">
+                    <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Flow</div>
+                    <div style="font-size:16px;font-weight:700;color:${hasFlow ? 'var(--success)' : 'var(--danger)'}">${pipe.currentFlow.toFixed(0)}</div>
+                    <div style="font-size:10px;color:var(--muted)">L/min</div>
+                    ${isBlocked ? '<span style="font-size:10px;color:var(--danger);margin-top:2px">⛔ VALVE CLOSED</span>' : hasFlow ? '<span style="font-size:10px;color:var(--success);margin-top:2px">✓ FLOWING</span>' : '<span style="font-size:10px;color:var(--danger);margin-top:2px">✗ NO FLOW</span>'}
+                  </div>
+                </div>
+              `;
+            }).join('') : '<div style="text-align:center;padding:12px;color:var(--muted);font-size:12px">No pipelines connected to this valve</div>'}
           </div>
           <div class="card">
             <h4><i class="fas fa-map-marker-alt"></i> LOCATION</h4>
@@ -1822,19 +2422,19 @@
             <button class="btn primary" onclick="map.setView([${device.lat},${device.lng}],18)"><i class="fas fa-crosshairs"></i> Center on Map</button>
           </div>
           <div class="card">
-            <h4><i class="fas fa-sliders"></i> FLOW CONTROL</h4>
+            <h4><i class="fas fa-sliders"></i> FLOW CONTROL (FIREBASE SYNC)</h4>
             <button class="btn success" onclick="setValveFlow('${device.id}', false)" ${!device.active ? 'disabled' : ''}><i class="fas fa-check"></i> Open Valve</button>
             <button class="btn danger" onclick="setValveFlow('${device.id}', true)" ${device.active ? 'disabled' : ''}><i class="fas fa-ban"></i> Close Valve</button>
           </div>
           <div class="card">
-            <h4><i class="fas fa-history"></i> HISTORY</h4>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">${device.history.length} records collected</p>
+            <h4><i class="fas fa-history"></i> HISTORY (FIREBASE)</h4>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">${device.history.length} records in Firebase</p>
             <button class="btn primary" onclick="showHistory('${device.id}', 'valve')"><i class="fas fa-table"></i> View Full History</button>
           </div>
           <div class="card">
             <h4><i class="fas fa-tools"></i> ACTIONS</h4>
             <button class="btn" onclick="editValve('${device.id}')"><i class="fas fa-pen"></i> Edit Valve</button>
-            <button class="btn danger" onclick="deleteValve('${device.id}')"><i class="fas fa-trash"></i> Delete Valve</button>
+            <button class="btn danger" onclick="deleteValve('${device.id}')"><i class="fas fa-trash"></i> Delete from Firebase</button>
           </div>
         `;
       }
@@ -1842,12 +2442,15 @@
       sidebar.classList.add('open');
     }
 
-    function showHistory(deviceId, type){
+    async function showHistory(deviceId, type){
       const device = type === 'tank' ? tanks.find(t => t.id === deviceId) : valves.find(v => v.id === deviceId);
       if(!device) return;
 
+      // Load history from Firebase
+      device.history = await FirebaseService.loadHistory(deviceId, type === 'tank' ? 'tanks' : 'valves');
+
       openModal('historyModal');
-      setText('historyModalTitle', `${device.name} - History`);
+      setText('historyModalTitle', `${device.name} - History (Firebase)`);
       document.getElementById('historyModal').setAttribute('data-device-id', deviceId);
       document.getElementById('historyModal').setAttribute('data-device-type', type);
       renderHistory(device, type);
@@ -1856,7 +2459,7 @@
     function renderHistory(device, type){
       const content = document.getElementById('historyContent');
       if(device.history.length === 0){
-        content.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">No historical data yet. Data is collected every 5 minutes.</div>';
+        content.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">No historical data in Firebase yet. Data is collected every 5 minutes.</div>';
         return;
       }
 
@@ -1944,7 +2547,7 @@
 
       const tempDevice = {...device, history: filtered};
       renderHistory(tempDevice, deviceType);
-      toast(`✓ Showing ${filtered.length} records`);
+      toast(`✓ Showing ${filtered.length} records from Firebase`);
     }
 
     function exportHistoryCsv(){
@@ -1974,17 +2577,17 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${device.id}-history-${Date.now()}.csv`;
+      a.download = `${device.id}-firebase-history-${Date.now()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      toast('✓ History exported to CSV');
+      toast('✓ History exported from Firebase to CSV');
     }
 
     function closeSidebar(){
       document.getElementById('sidebar').classList.remove('open');
     }
 
-    function setValveFlow(id, shouldBlock){
+    async function setValveFlow(id, shouldBlock){
       const valve = valves.find(v => v.id === id);
       if(!valve) return;
       
@@ -1992,15 +2595,28 @@
       valve.valveState = shouldBlock ? 'closed' : 'open';
       valve.recordHistory();
       
+      // Save to Firebase
+      await FirebaseService.saveValve(valve);
+      
+      // Save history to Firebase
+      const record = {
+        timestamp: Date.now(),
+        battery: valve.battery,
+        pressure: valve.pressure,
+        valveState: valve.valveState,
+        active: valve.active,
+        status: valve.status
+      };
+      await FirebaseService.saveHistory(valve.id, 'valves', record);
+      
       const affectedPipelines = findAffectedPipelines(valve);
-      DataStore.save();
       drawCanvas();
       
       const pipeNames = affectedPipelines.map(p => p.name).join(', ');
       if(shouldBlock){
-        toast(`🔴 Valve closed - Affected pipelines: ${pipeNames || 'None'}`);
+        toast(`🔴 Valve closed (Firebase synced) - Affected: ${pipeNames || 'None'}`);
       } else {
-        toast(`✓ Valve opened - Restored flow to: ${pipeNames || 'None'}`);
+        toast(`✓ Valve opened (Firebase synced) - Restored: ${pipeNames || 'None'}`);
       }
       
       showDevice(valve, 'valve');
@@ -2131,6 +2747,7 @@
 
           let color = '#b0b9c4';
           let glow = 'rgba(176,185,196,0.4)';
+          let lineWidth = LINE_W;
           
           if(connected){
             if(blocked){
@@ -2141,6 +2758,17 @@
               glow = 'rgba(30,136,229,0.6)';
             }
           }
+          
+          // Highlight segment on hover in erase mode
+          if(mode === 'erase' && hoveredDevice?.type === 'pipeline'){
+            const hoveredPipe = hoveredDevice.data.pipe;
+            const hoveredSegment = hoveredDevice.data.segmentIndex;
+            if(hoveredPipe.id === pipe.id && hoveredSegment === i){
+              color = '#ff6b6b';
+              glow = 'rgba(255,107,107,0.8)';
+              lineWidth = LINE_W + 2;
+            }
+          }
 
           const a = latLngToPixel(p1);
           const b = latLngToPixel(p2);
@@ -2148,7 +2776,7 @@
           ctx.shadowColor = glow;
           ctx.shadowBlur = 14;
           ctx.strokeStyle = color;
-          ctx.lineWidth = LINE_W;
+          ctx.lineWidth = lineWidth;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
           
@@ -2289,9 +2917,7 @@
       if(el){
         el.classList.remove('active');
         
-        // If closing pipeline modal and we just drew a pipeline, stay in pipeline mode
         if(id === 'pipelineModal' && mode === 'pipeline'){
-          // Re-disable map dragging for next draw
           map.dragging.disable();
           map.scrollWheelZoom.disable();
         }
