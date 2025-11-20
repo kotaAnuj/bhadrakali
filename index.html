@@ -941,18 +941,22 @@
     
     /* Supply Dashboard Styles */
     .supply-dashboard {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      width: 320px;
-      background: var(--panel);
-      border-radius: 12px;
-      box-shadow: 0 6px 20px rgba(0,0,0,.08);
-      border: 1px solid var(--line);
-      z-index: 1000;
-      overflow: hidden;
-    }
-    
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 320px;
+  background: var(--panel);
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.08);
+  border: 1px solid var(--line);
+  z-index: 1000;
+  overflow: hidden;
+  transition: right 0.3s cubic-bezier(.4,0,.2,1);
+}
+
+.supply-dashboard.shifted {
+  right: 500px; /* Moves left when sidebar is open */
+}
     .supply-dashboard-header {
       padding: 12px 16px;
       background: #fafbfc;
@@ -1786,22 +1790,25 @@
   
   let headers, rowMapper;
   if(deviceType === 'tanks') {
-    headers = ['Timestamp', 'Date', 'Water Level (m)', 'Volume (L)', 'Outflow Rate (L/min)', 'ETA', 'Pressure (PSI)', 'Flow Rate (L/min)', 'pH', 'Temperature (°C)', 'Status', 'Changes'];
-    rowMapper = (h) => [
-      h.timestamp,
-      new Date(h.timestamp).toLocaleString(),
-      h.waterLevel || '',
-      h.currentVolume || '',
-      h.outflowRate || '',
-      h.etaFormatted || '',
-      h.pressure || '',
-      h.flowRate || '',
-      h.pH || '',
-      h.temperature || '',
-      h.status || '',
-      `"${(h.changes || '').replace(/"/g, '""')}"` // Escape quotes in changes
-    ];
-  } else {
+  headers = ['Timestamp', 'Date', 'Water Level (m)', 'Volume (L)', 'Outflow Rate (L/min)', 'ETA', 'Total Households', 'Served Households', 'Coverage (%)', 'Pressure (PSI)', 'Flow Rate (L/min)', 'pH', 'Temperature (°C)', 'Status', 'Changes'];
+  rowMapper = (h) => [
+    h.timestamp,
+    new Date(h.timestamp).toLocaleString(),
+    h.waterLevel || '',
+    h.currentVolume || '',
+    h.outflowRate || '',
+    h.etaFormatted || '',
+    h.totalHouseholds || 0,
+    h.servedHouseholds || 0,
+    h.householdCoverage || 0,
+    h.pressure || '',
+    h.flowRate || '',
+    h.pH || '',
+    h.temperature || '',
+    h.status || '',
+    `"${(h.changes || '').replace(/"/g, '""')}"` // Escape quotes in changes
+  ];
+}else {
     headers = ['Timestamp', 'Date', 'Valve State', 'Supply Flow (L/min)', 'Avg Supply/HH (L/min)', 'Households Served', 'Battery (%)', 'Pressure (PSI)', 'Active', 'Changes'];
     rowMapper = (h) => [
       h.timestamp,
@@ -3117,6 +3124,7 @@ function autoFilterDashboardByDevice(device) {
   dataCollectionInterval = setInterval(async () => {
     // Track tanks with change detection
     // Track tanks with change detection
+// Track tanks with change detection
 for(const tank of tanks) {
   // Store PREVIOUS state BEFORE generating new data
   const previousData = {
@@ -3133,6 +3141,26 @@ for(const tank of tanks) {
   
   // Calculate ETA for history (do this BEFORE detecting changes)
   const etaData = calculateTankETA(tank);
+  
+  // ADD THIS: Calculate household statistics for this tank
+  const { stats } = calculateHouseholdStats();
+  let tankHouseholds = 0;
+  let tankServedHouseholds = 0;
+  
+  // Find households served by this tank's connected valves
+  if (tank.connectedMainValves && tank.connectedMainValves.length > 0) {
+    const connectedValves = valves.filter(v => 
+      tank.connectedMainValves.includes(v.id) && v.category === 'main'
+    );
+    
+    connectedValves.forEach(mainValve => {
+      const mainData = stats.mainValves.find(m => m.valve.id === mainValve.id);
+      if (mainData) {
+        tankHouseholds += mainData.totalHouseholds;
+        tankServedHouseholds += mainData.servedHouseholds;
+      }
+    });
+  }
   
   // Detect changes by comparing previous vs current
   const changes = [];
@@ -3151,7 +3179,7 @@ for(const tank of tanks) {
   
   await FirebaseService.saveTank(tank);
   
-  // Save to history with changes and ETA
+  // Save to history with changes, ETA, AND HOUSEHOLD DATA
   await HistoryService.saveDataPoint(tank.id, 'tanks', {
     waterLevel: parseFloat(tank.waterLevel),
     pressure: parseFloat(tank.pressure),
@@ -3160,13 +3188,16 @@ for(const tank of tanks) {
     temperature: parseFloat(tank.temperature),
     status: tank.status,
     changes: changes.length > 0 ? changes.join('; ') : 'No significant changes',
-    etaMinutes: parseFloat(etaData.timeToEmptyMinutes) || 0,
-    etaFormatted: etaData.timeToEmptyFormatted || 'N/A',
-    outflowRate: parseFloat(etaData.flowRate) || 0,
-    currentVolume: parseFloat(etaData.currentVolume) || 0
+    etaMinutes: parseFloat(etaData.currentTimeMinutes) || 0,
+    etaFormatted: etaData.currentTimeFormatted || 'N/A',
+    outflowRate: parseFloat(etaData.currentFlow) || 0,
+    currentVolume: parseFloat(etaData.currentVolume) || 0,
+    // NEW FIELDS:
+    totalHouseholds: tankHouseholds,
+    servedHouseholds: tankServedHouseholds,
+    householdCoverage: tankHouseholds > 0 ? ((tankServedHouseholds / tankHouseholds) * 100).toFixed(1) : 0
   });
-}
-    
+}   
     // Track valves with change detection
     // Track valves with change detection
 for(const valve of valves) {
@@ -4287,95 +4318,129 @@ for(const valve of valves) {
     }
 
     function renderHistory(history) {
-      const historyContent = document.getElementById('historyContent');
-      
-      if(history.length === 0) {
-        historyContent.innerHTML = `
-          <div style="text-align: center; padding: 40px; color: var(--muted);">
-            <i class="fas fa-inbox" style="font-size: 32px;"></i>
-            <div style="margin-top: 12px;">No history data available for this date range</div>
-          </div>
-        `;
-        return;
-      }
-      
-      let tableHTML;
-      if(currentHistoryType === 'tanks') {
-  tableHTML = `
-    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-      <thead>
-        <tr style="background: #fafbfc; border-bottom: 2px solid var(--line);">
-          <th style="padding: 12px; text-align: left; font-weight: 700;">Date & Time</th>
-          <th style="padding: 12px; text-align: center;">Water Level</th>
-          <th style="padding: 12px; text-align: center;">Volume</th>
-          <th style="padding: 12px; text-align: center;">Outflow Rate</th>
-          <th style="padding: 12px; text-align: center;">ETA</th>
-          <th style="padding: 12px; text-align: left; min-width: 200px;">Changes</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${history.map((h, idx) => `
-          <tr style="border-bottom: 1px solid #f2f4f7; ${idx % 2 === 0 ? 'background: #fafbfc;' : ''}">
-            <td style="padding: 10px; white-space: nowrap;">${new Date(h.timestamp).toLocaleString()}</td>
-            <td style="padding: 10px; text-align: center; font-weight: 600;">${h.waterLevel || '-'} m</td>
-            <td style="padding: 10px; text-align: center;">${h.currentVolume || '-'} L</td>
-            <td style="padding: 10px; text-align: center; font-weight: 600; color: ${h.outflowRate > 100 ? '#f44336' : '#4caf50'};">${h.outflowRate ? h.outflowRate.toFixed(1) : '-'} L/min</td>
-            <td style="padding: 10px; text-align: center; font-weight: 600; color: ${h.etaMinutes < 60 ? '#f44336' : h.etaMinutes < 240 ? '#ff9800' : '#4caf50'};">
-              ${h.etaFormatted || '-'}
-            </td>
-            <td style="padding: 10px; font-size: 11px; color: #666;">
-              ${h.changes || 'No changes recorded'}
-            </td>
+  const historyContent = document.getElementById('historyContent');
+  
+  if(history.length === 0) {
+    historyContent.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: var(--muted);">
+        <i class="fas fa-inbox" style="font-size: 32px;"></i>
+        <div style="margin-top: 12px;">No history data available for this date range</div>
+      </div>
+    `;
+    return;
+  }
+  
+  let tableHTML = ''; // IMPORTANT: Initialize variable
+  
+  if(currentHistoryType === 'tanks') {
+    tableHTML = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="background: #fafbfc; border-bottom: 2px solid var(--line);">
+            <th style="padding: 12px; text-align: left; font-weight: 700;">Date & Time</th>
+            <th style="padding: 12px; text-align: center;">Water Level</th>
+            <th style="padding: 12px; text-align: center;">Volume</th>
+            <th style="padding: 12px; text-align: center;">Outflow Rate</th>
+            <th style="padding: 12px; text-align: center;">ETA</th>
+            <th style="padding: 12px; text-align: center;">Households</th>
+            <th style="padding: 12px; text-align: left; min-width: 200px;">Changes</th>
           </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-} else {
-  tableHTML = `
-    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-      <thead>
-        <tr style="background: #fafbfc; border-bottom: 2px solid var(--line);">
-          <th style="padding: 12px; text-align: left; font-weight: 700;">Date & Time</th>
-          <th style="padding: 12px; text-align: center;">State</th>
-          <th style="padding: 12px; text-align: center;">Supply Flow</th>
-          <th style="padding: 12px; text-align: center;">Avg/HH</th>
-          <th style="padding: 12px; text-align: center;">Served</th>
-          <th style="padding: 12px; text-align: left; min-width: 200px;">Changes</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${history.map((h, idx) => `
-          <tr style="border-bottom: 1px solid #f2f4f7; ${idx % 2 === 0 ? 'background: #fafbfc;' : ''}">
-            <td style="padding: 10px; white-space: nowrap;">${new Date(h.timestamp).toLocaleString()}</td>
-            <td style="padding: 10px; text-align: center;">
-              <span style="padding: 4px 8px; border-radius: 6px; background: ${h.valveState === 'open' ? '#e9f7ee' : '#fdeaea'}; color: ${h.valveState === 'open' ? 'var(--success)' : 'var(--danger)'}; font-weight: 600; font-size: 11px;">
-                ${(h.valveState || 'unknown').toUpperCase()}
-              </span>
-            </td>
-            <td style="padding: 10px; text-align: center; font-weight: 600; color: ${h.supplyFlow > 0 ? '#4caf50' : '#999'};">
-              ${h.supplyFlow ? h.supplyFlow.toFixed(0) : '0'} L/min
-            </td>
-            <td style="padding: 10px; text-align: center; font-weight: 600;">
-              ${h.avgSupplyPerHousehold ? h.avgSupplyPerHousehold.toFixed(2) : '0'} L/min
-            </td>
-            <td style="padding: 10px; text-align: center;">
-              <span style="padding: 4px 8px; border-radius: 6px; background: ${h.householdsServed > 0 ? '#e9f7ee' : '#fdeaea'}; color: ${h.householdsServed > 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600; font-size: 11px;">
-                ${h.householdsServed || 0} HH
-              </span>
-            </td>
-            <td style="padding: 10px; font-size: 11px; color: #666;">
-              ${h.changes || 'No changes recorded'}
-            </td>
+        </thead>
+        <tbody>
+          ${history.map((h, idx) => `
+            <tr style="border-bottom: 1px solid #f2f4f7; ${idx % 2 === 0 ? 'background: #fafbfc;' : ''}">
+              <td style="padding: 10px; white-space: nowrap;">${new Date(h.timestamp).toLocaleString()}</td>
+              <td style="padding: 10px; text-align: center; font-weight: 600;">${h.waterLevel || '-'} m</td>
+              <td style="padding: 10px; text-align: center;">${h.currentVolume || '-'} L</td>
+              <td style="padding: 10px; text-align: center; font-weight: 600; color: ${(h.outflowRate || 0) > 100 ? '#f44336' : '#4caf50'};">${h.outflowRate ? h.outflowRate.toFixed(1) : '-'} L/min</td>
+              <td style="padding: 10px; text-align: center; font-weight: 600; color: ${(h.etaMinutes || 0) < 60 ? '#f44336' : (h.etaMinutes || 0) < 240 ? '#ff9800' : '#4caf50'};">
+                ${h.etaFormatted || '-'}
+              </td>
+              <td style="padding: 10px; text-align: center;">
+                <div style="font-weight: 700; color: #6a1b9a;">${h.servedHouseholds || 0}/${h.totalHouseholds || 0}</div>
+                <div style="font-size: 10px; color: ${(h.householdCoverage || 0) > 80 ? '#4caf50' : '#ff9800'};">
+                  ${h.householdCoverage || 0}% coverage
+                </div>
+              </td>
+              <td style="padding: 10px; font-size: 11px; color: #666;">
+                ${h.changes || 'No changes recorded'}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } else if(currentHistoryType === 'valves') {
+    tableHTML = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="background: #fafbfc; border-bottom: 2px solid var(--line);">
+            <th style="padding: 12px; text-align: left; font-weight: 700;">Date & Time</th>
+            <th style="padding: 12px; text-align: center;">State</th>
+            <th style="padding: 12px; text-align: center;">Supply Flow</th>
+            <th style="padding: 12px; text-align: center;">Avg/HH</th>
+            <th style="padding: 12px; text-align: center;">Served</th>
+            <th style="padding: 12px; text-align: left; min-width: 200px;">Changes</th>
           </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
+        </thead>
+        <tbody>
+          ${history.map((h, idx) => `
+            <tr style="border-bottom: 1px solid #f2f4f7; ${idx % 2 === 0 ? 'background: #fafbfc;' : ''}">
+              <td style="padding: 10px; white-space: nowrap;">${new Date(h.timestamp).toLocaleString()}</td>
+              <td style="padding: 10px; text-align: center;">
+                <span style="padding: 4px 8px; border-radius: 6px; background: ${h.valveState === 'open' ? '#e9f7ee' : '#fdeaea'}; color: ${h.valveState === 'open' ? 'var(--success)' : 'var(--danger)'}; font-weight: 600; font-size: 11px;">
+                  ${(h.valveState || 'unknown').toUpperCase()}
+                </span>
+              </td>
+              <td style="padding: 10px; text-align: center; font-weight: 600; color: ${(h.supplyFlow || 0) > 0 ? '#4caf50' : '#999'};">
+                ${h.supplyFlow ? h.supplyFlow.toFixed(0) : '0'} L/min
+              </td>
+              <td style="padding: 10px; text-align: center; font-weight: 600;">
+                ${h.avgSupplyPerHousehold ? h.avgSupplyPerHousehold.toFixed(2) : '0'} L/min
+              </td>
+              <td style="padding: 10px; text-align: center;">
+                <span style="padding: 4px 8px; border-radius: 6px; background: ${(h.householdsServed || 0) > 0 ? '#e9f7ee' : '#fdeaea'}; color: ${(h.householdsServed || 0) > 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600; font-size: 11px;">
+                  ${h.householdsServed || 0} HH
+                </span>
+              </td>
+              <td style="padding: 10px; font-size: 11px; color: #666;">
+                ${h.changes || 'No changes recorded'}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } else {
+    // Fallback for unknown type
+    tableHTML = `
+      <div style="text-align: center; padding: 40px; color: var(--muted);">
+        <i class="fas fa-exclamation-triangle" style="font-size: 32px;"></i>
+        <div style="margin-top: 12px;">Unknown history type</div>
+      </div>
+    `;
+  }
+  
+  historyContent.innerHTML = tableHTML;
 }
-      
-      historyContent.innerHTML = tableHTML;
-    }
+
+
+// TEMPORARY DEBUG FUNCTION - Remove after testing
+async function debugHistory() {
+  console.log('🔍 Debug: Current History Device:', currentHistoryDevice);
+  console.log('🔍 Debug: Current History Type:', currentHistoryType);
+  console.log('🔍 Debug: Current History Data:', currentHistoryData);
+  
+  if (currentHistoryDevice && currentHistoryType) {
+    const testData = await HistoryService.getHistory(
+      currentHistoryDevice,
+      currentHistoryType,
+      null,
+      null
+    );
+    console.log('🔍 Debug: Fetched History from Firebase:', testData);
+  }
+}
 
     function exportCurrentHistory() {
       if(!currentHistoryDevice || !currentHistoryData) return;
@@ -4391,6 +4456,9 @@ for(const valve of valves) {
 
     // ==================== SIDEBAR ====================
     async function showDevice(device, type) {
+
+      document.getElementById('supplyDashboard').classList.add('shifted');
+
       const sidebar = document.getElementById('sidebar');
       const body = document.getElementById('sidebarBody');
       
@@ -4826,8 +4894,10 @@ for(const valve of valves) {
       sidebar.classList.add('open');
     }
 
-    function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); }
-
+function closeSidebar() { 
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('supplyDashboard').classList.remove('shifted');
+}
     async function setValveFlow(id, shouldBlock) {
       const valve = valves.find(v => v.id === id);
       if(!valve) return;
