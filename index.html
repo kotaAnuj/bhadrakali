@@ -1788,39 +1788,82 @@
     return;
   }
   
+  // Helper function to safely format numbers (works for both tanks and valves)
+  const safeNumber = (value, decimals = 0) => {
+    if (value === undefined || value === null || isNaN(value) || !isFinite(value)) {
+      return '';
+    }
+    return Number(value).toFixed(decimals);
+  };
+  
   let headers, rowMapper;
+  
   if(deviceType === 'tanks') {
-  headers = ['Timestamp', 'Date', 'Water Level (m)', 'Volume (L)', 'Outflow Rate (L/min)', 'ETA', 'Total Households', 'Served Households', 'Coverage (%)', 'Pressure (PSI)', 'Flow Rate (L/min)', 'pH', 'Temperature (°C)', 'Status', 'Changes'];
-  rowMapper = (h) => [
-    h.timestamp,
-    new Date(h.timestamp).toLocaleString(),
-    h.waterLevel || '',
-    h.currentVolume || '',
-    h.outflowRate || '',
-    h.etaFormatted || '',
-    h.totalHouseholds || 0,
-    h.servedHouseholds || 0,
-    h.householdCoverage || 0,
-    h.pressure || '',
-    h.flowRate || '',
-    h.pH || '',
-    h.temperature || '',
-    h.status || '',
-    `"${(h.changes || '').replace(/"/g, '""')}"` // Escape quotes in changes
-  ];
-}else {
-    headers = ['Timestamp', 'Date', 'Valve State', 'Supply Flow (L/min)', 'Avg Supply/HH (L/min)', 'Households Served', 'Battery (%)', 'Pressure (PSI)', 'Active', 'Changes'];
+    headers = [
+      'Timestamp', 
+      'Date', 
+      'Water Level (m)', 
+      'Volume (L)', 
+      'Outflow Rate (L/min)', 
+      'ETA (Time)', 
+      'ETA (Minutes)',
+      'Total Households', 
+      'Served Households', 
+      'Coverage (%)', 
+      'Pressure (PSI)', 
+      'Flow Rate (L/min)', 
+      'pH', 
+      'Temperature (°C)', 
+      'Status', 
+      'Changes'
+    ];
+    
     rowMapper = (h) => [
-      h.timestamp,
-      new Date(h.timestamp).toLocaleString(),
-      h.valveState || '',
-      h.supplyFlow || '',
-      h.avgSupplyPerHousehold || '',
-      h.householdsServed || '',
-      h.battery || '',
-      h.pressure || '',
-      h.active ? 'Closed' : 'Open',
-      `"${(h.changes || '').replace(/"/g, '""')}"` // Escape quotes in changes
+      h.timestamp || '',
+      h.date || new Date(h.timestamp || Date.now()).toLocaleString(),
+      safeNumber(h.waterLevel, 1),
+      safeNumber(h.currentVolume, 0),
+      safeNumber(h.outflowRate, 2),
+      h.etaFormatted || 'N/A',
+      safeNumber(h.etaMinutes, 1),
+      h.totalHouseholds || 0,
+      h.servedHouseholds || 0,
+      safeNumber(h.householdCoverage, 1),
+      safeNumber(h.pressure, 1),
+      safeNumber(h.flowRate, 1),
+      safeNumber(h.pH, 2),
+      safeNumber(h.temperature, 0),
+      h.status || 'unknown',
+      `"${(h.changes || 'No significant changes').replace(/"/g, '""')}"` // Escape quotes
+    ];
+  } else {
+    // Valves
+    headers = [
+      'Timestamp', 
+      'Date', 
+      'Valve State', 
+      'Control Status',
+      'Supply Flow (L/min)', 
+      'Avg Supply/HH (L/min)', 
+      'Total Households',
+      'Households Served', 
+      'Battery (%)', 
+      'Pressure (PSI)', 
+      'Changes'
+    ];
+    
+    rowMapper = (h) => [
+      h.timestamp || '',
+      h.date || new Date(h.timestamp || Date.now()).toLocaleString(),
+      h.valveState || 'unknown',
+      h.active ? 'CLOSED' : 'OPEN',
+      safeNumber(h.supplyFlow, 2),
+      safeNumber(h.avgSupplyPerHousehold, 2),
+      h.households || '',
+      h.householdsServed || 0,
+      safeNumber(h.battery, 0),
+      safeNumber(h.pressure, 1),
+      `"${(h.changes || 'No changes').replace(/"/g, '""')}"` // Escape quotes
     ];
   }
   
@@ -1829,11 +1872,11 @@
     ...history.map(h => rowMapper(h).join(','))
   ].join('\n');
   
-  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${deviceName}-history-${Date.now()}.csv`;
+  a.download = `${deviceName.replace(/[^a-z0-9]/gi, '_')}-history-${Date.now()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   toast('✓ History exported to CSV');
@@ -3125,6 +3168,7 @@ function autoFilterDashboardByDevice(device) {
     // Track tanks with change detection
     // Track tanks with change detection
 // Track tanks with change detection
+// FIND THIS SECTION (around line 1170):
 for(const tank of tanks) {
   // Store PREVIOUS state BEFORE generating new data
   const previousData = {
@@ -3161,6 +3205,8 @@ for(const tank of tanks) {
       }
     });
   }
+
+
   
   // Detect changes by comparing previous vs current
   const changes = [];
@@ -4940,8 +4986,12 @@ function closeSidebar() {
 
     // ==================== FLOW CALCULATION (CACHED) ====================
     function isSegmentBlocked(p1, p2) {
-      return valves.some(v => v.active && pointOnSegment(v, p1, p2, POINT_R + 4));
-    }
+  // A segment is blocked if there's a CLOSED valve (active=true) on it
+  return valves.some(v => {
+    if (!v.active) return false; // Valve is open, doesn't block
+    return pointOnSegment(v, p1, p2, POINT_R + 4);
+  });
+}
 
     function connectedSegments(point, excludePi = -1, excludeSi = -1) {
       const results = [];
@@ -4978,7 +5028,7 @@ function closeSidebar() {
       const seen = new Set();
       const queue = [...starts];
 
-      while(queue.length > 0) {
+     while(queue.length > 0) {
         const current = queue.shift();
         const key = `${current.pi}-${current.si}`;
         if(seen.has(key)) continue;
@@ -4987,11 +5037,15 @@ function closeSidebar() {
         const pipe = pipelines[current.pi].points;
         const p1 = pipe[current.si];
         const p2 = pipe[current.si + 1];
+        
+        // Check if this segment is blocked by a CLOSED valve (active=true)
         const blocked = isSegmentBlocked(p1, p2);
 
         if(!flow.p[current.pi]) flow.p[current.pi] = {s: {}};
-        flow.p[current.pi].s[current.si] = {hasFlow: !blocked, blocked};
-
+        flow.p[current.pi].s[current.si] = {
+          hasFlow: !blocked,  // Flow only if NOT blocked
+          blocked: blocked    // True if a closed valve is on this segment
+        };
         if(!blocked) {
           if(current.si + 1 < pipe.length - 1) queue.push({pi: current.pi, si: current.si + 1});
           if(current.si - 1 >= 0) queue.push({pi: current.pi, si: current.si - 1});
@@ -5013,6 +5067,8 @@ function closeSidebar() {
           pipe.currentFlow = 0;
         }
       });
+      
+
 
       flowCache = flow;
       flowCacheDirty = false;
@@ -5040,6 +5096,7 @@ function closeSidebar() {
       const flow = computeFlow();
 
       // Pipelines
+      // Pipelines
       pipelines.forEach((pipe, pi) => {
         for(let i = 0; i < pipe.points.length - 1; i++) {
           const p1 = pipe.points[i];
@@ -5049,12 +5106,27 @@ function closeSidebar() {
           const blocked = !!stat?.blocked;
           const connected = stat !== undefined;
 
+          // Default: gray for unconnected segments
           let color = '#b0b9c4';
           let glow = 'rgba(176,185,196,0.4)';
           let lineWidth = LINE_W;
+          
           if(connected) {
-            if(blocked) { color = '#d32f2f'; glow = 'rgba(211,47,47,0.6)'; }
-            else if(hasFlow) { color = '#1e88e5'; glow = 'rgba(30,136,229,0.6)'; }
+            if(blocked) { 
+              // Red: segment is connected but blocked by a closed valve
+              color = '#d32f2f'; 
+              glow = 'rgba(211,47,47,0.6)'; 
+            }
+            else if(hasFlow) { 
+              // Blue: segment is connected and has active flow
+              color = '#1e88e5'; 
+              glow = 'rgba(30,136,229,0.6)'; 
+            }
+            else {
+              // Green/cyan: segment is connected but no flow (no blocking valve, but no water source reaching it)
+              color = '#4caf50'; 
+              glow = 'rgba(76,175,80,0.4)';
+            }
           }
           if(mode === 'erase' && hoveredDevice?.type === 'pipeline') {
             const hoveredPipe = hoveredDevice.data.pipe;
