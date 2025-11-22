@@ -879,17 +879,19 @@
     /* Hover Tooltip Styles */
     .hover-tooltip {
       position: absolute;
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(20, 20, 30, 0.95);
       color: white;
-      padding: 8px 12px;
-      border-radius: 8px;
+      padding: 12px 16px;
+      border-radius: 10px;
       font-size: 12px;
       font-weight: 500;
       z-index: 2000;
       pointer-events: none;
-      max-width: 300px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      backdrop-filter: blur(4px);
+      max-width: 320px;
+      min-width: 200px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       transform: translateY(-10px);
       opacity: 0;
       transition: opacity 0.2s, transform 0.2s;
@@ -902,33 +904,78 @@
     
     .hover-tooltip .tooltip-title {
       font-weight: 700;
-      margin-bottom: 4px;
+      font-size: 14px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
+    }
+    
+    .hover-tooltip .tooltip-section {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .hover-tooltip .tooltip-section-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 700;
+      margin-bottom: 6px;
     }
     
     .hover-tooltip .tooltip-row {
       display: flex;
       justify-content: space-between;
-      margin-top: 4px;
+      margin-top: 6px;
+      padding: 4px 0;
     }
     
     .hover-tooltip .tooltip-label {
-      color: #ccc;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 11px;
     }
     
     .hover-tooltip .tooltip-value {
       color: white;
-      font-weight: 600;
+      font-weight: 700;
+      font-size: 12px;
     }
     
     .hover-tooltip .status-indicator {
       display: inline-block;
-      width: 6px;
-      height: 6px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
-      margin-right: 4px;
+      margin-right: 6px;
+      box-shadow: 0 0 8px currentColor;
+    }
+    
+    .hover-tooltip .status-active {
+      background: #4caf50;
+      color: #4caf50;
+    }
+    
+    .hover-tooltip .status-inactive {
+      background: #f44336;
+      color: #f44336;
+    }
+    
+    .hover-tooltip .live-badge {
+      display: inline-block;
+      background: #4caf50;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      animation: pulse 2s infinite;
     }
     
     .hover-tooltip .status-active {
@@ -1147,8 +1194,8 @@
     <button id="toolValve" class="tool-btn" title="Add valve"><i class="fas fa-cog"></i></button>
     <button id="toolErase" class="tool-btn" title="Erase pipeline segment"><i class="fas fa-eraser"></i></button>
     <button id="toolManage" class="tool-btn" title="Manage"><i class="fas fa-list"></i></button>
-    <button id="toolImport" class="tool-btn" title="Import data"><i class="fas fa-upload"></i></button>
-    <button id="toolClear" class="tool-btn" title="Clear all"><i class="fas fa-trash"></i></button>
+  <!-- <button id="toolImport" class="tool-btn" title="Import data"><i class="fas fa-upload"></i></button> 
+    <button id="toolClear" class="tool-btn" title="Clear all"><i class="fas fa-trash"></i></button> -->
     
     <div class="toolbar-separator"></div>
     
@@ -1203,9 +1250,54 @@
       <option value="ESR">ESR (Elevated Storage Reservoir)</option>
     </select>
   </div>
-  <div class="form-row"><label>Capacity (L) *</label><input id="tankCapacity" type="number" placeholder="20000"/></div>
-  <div class="form-row"><label>Current Water Level (m) *</label><input id="tankWaterLevel" type="number" step="0.1" placeholder="8.5"/></div>
+  <div class="form-row">
+    <label>Shape *</label>
+    <select id="tankShape">
+      <option value="cylinder">Cylinder (OHSR/ESR)</option>
+      <option value="cuboid">Cuboid (GSR)</option>
+    </select>
+  </div>
   
+  <!-- Cylinder dimensions -->
+  <div id="cylinderDimensions">
+    <div class="form-row">
+      <label>Diameter (m) *</label>
+      <input id="tankDiameter" type="number" step="0.1" placeholder="10" value="10"/>
+    </div>
+    <div class="form-row">
+      <label>Height (m) *</label>
+      <input id="tankHeight" type="number" step="0.1" placeholder="10" value="10"/>
+    </div>
+  </div>
+  
+  <!-- Cuboid dimensions -->
+  <div id="cuboidDimensions" style="display: none;">
+    <div class="form-row">
+      <label>Length (m) *</label>
+      <input id="tankLength" type="number" step="0.1" placeholder="10" value="10"/>
+    </div>
+    <div class="form-row">
+      <label>Breadth (m) *</label>
+      <input id="tankBreadth" type="number" step="0.1" placeholder="10" value="10"/>
+    </div>
+    <div class="form-row">
+      <label>Height (m) *</label>
+      <input id="tankHeightCuboid" type="number" step="0.1" placeholder="10" value="10"/>
+    </div>
+  </div>
+  
+  <div class="form-row">
+    <label>Capacity (L) * <small style="color: var(--muted);">(Auto-calculated or manual)</small></label>
+    <input id="tankCapacity" type="number" placeholder="20000"/>
+    <button type="button" class="btn primary" id="calculateCapacity" style="margin-top: 8px;">
+      <i class="fas fa-calculator"></i> Calculate from Dimensions
+    </button>
+  </div>
+  
+  <div class="form-row">
+    <label>Current Water Level (m) *</label>
+    <input id="tankWaterLevel" type="number" step="0.1" placeholder="8.5" max="10"/>
+  </div>
   <!-- NEW: Connected Main Valves Section -->
   <div class="form-row">
     <label>Connected Main Valves * (Select all main valves connected to this tank)</label>
@@ -1320,7 +1412,7 @@
       </div>
       <div class="modal-body">
         <div class="card" style="margin-bottom: 16px;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: end;">
             <div class="form-row" style="margin-bottom: 0;">
               <label>Start Date</label>
               <input type="date" id="historyStartDate" style="padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px;">
@@ -1328,6 +1420,16 @@
             <div class="form-row" style="margin-bottom: 0;">
               <label>End Date</label>
               <input type="date" id="historyEndDate" style="padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px;">
+            </div>
+            <div class="form-row" style="margin-bottom: 0;">
+              <label>Time Range (Hours)</label>
+              <select id="historyTimeRange" style="padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px;">
+                <option value="">All Day</option>
+                <option value="0-6">12 AM - 6 AM</option>
+                <option value="6-12">6 AM - 12 PM</option>
+                <option value="12-18">12 PM - 6 PM</option>
+                <option value="18-24">6 PM - 12 AM</option>
+              </select>
             </div>
             <button class="btn primary" id="filterHistoryBtn" style="margin: 0; height: 44px;">
               <i class="fas fa-filter"></i> Filter
@@ -1450,11 +1552,23 @@
       type: data.type || 'OHSR',
       capacity: parseFloat(data.capacity) || 20000,
       waterLevel: parseFloat(data.waterLevel) || 8.5,
+      
+      // NEW: Physical dimensions for accurate volume calculation
+      shape: data.shape || (data.type === 'GSR' ? 'cuboid' : 'cylinder'),
+      
+      // For cylindrical tanks (OHSR, ESR)
+      diameter: parseFloat(data.diameter) || 10, // meters
+      height: parseFloat(data.height) || 10, // meters (max height)
+      
+      // For cuboid tanks (GSR)
+      length: parseFloat(data.length) || 10, // meters
+      breadth: parseFloat(data.breadth) || 10, // meters
+      
       state: data.state || 'Telangana',
       district: data.district || 'Mulugu',
       mandal: data.mandal || 'Eturunagaram',
       habitation: data.habitation || 'Ellishettypalle',
-      connectedMainValves: data.connectedMainValves || [], // Ensure this is array
+      connectedMainValves: data.connectedMainValves || [],
       status: data.status || 'active',
       pressure: data.pressure || (Math.random()*10+25).toFixed(1),
       flowRate: data.flowRate || (Math.random()*30+50).toFixed(1),
@@ -1468,46 +1582,78 @@
       this.connectedMainValves = [];
     }
   }
-      
-      generateLiveData() {
-        this.pressure = (Math.random()*10+25).toFixed(1);
-        this.flowRate = (Math.random()*30+50).toFixed(1);
-        this.pH = (Math.random()*1+6.5).toFixed(2);
-        this.temperature = (Math.random()*5+20).toFixed(0);
-        this.lastUpdate = Date.now();
-      }
-      
-      setWaterLevel(level) {
-        this.waterLevel = parseFloat(level);
-        this.lastUpdate = Date.now();
-      }
-      
-      update(data) { Object.assign(this, data); }
-      
-      toFirebase() {
-        return {
-          id: this.id, name: this.name, lat: this.lat, lng: this.lng,
-          type: this.type, capacity: this.capacity, waterLevel: this.waterLevel,
-          state: this.state, district: this.district, mandal: this.mandal,
-          habitation: this.habitation,connectedMainValves: this.connectedMainValves, status: this.status, pressure: this.pressure,
-          flowRate: this.flowRate, pH: this.pH, temperature: this.temperature,
-          lastUpdate: this.lastUpdate
-        };
-      }
-      
-      info() {
-        return {
-          id: this.id, name: this.name, type: this.type, 
-          capacity: `${this.capacity} L`, waterLevel: `${this.waterLevel} m`,
-          pressure: `${this.pressure} PSI`, flowRate: `${this.flowRate} L/min`,
-          pH: this.pH, temperature: `${this.temperature}°C`, status: this.status,
-          loc: {
-            state: this.state, district: this.district, mandal: this.mandal,
-            habitation: this.habitation, coords: `${this.lat.toFixed(6)}, ${this.lng.toFixed(6)}`
-          }
-        };
-      }
+  
+  // NEW: Calculate accurate volume based on tank shape
+  calculateCurrentVolume() {
+    if (this.shape === 'cylinder') {
+      // Volume = π × r² × h
+      const radius = this.diameter / 2;
+      return Math.PI * Math.pow(radius, 2) * this.waterLevel;
+    } else if (this.shape === 'cuboid') {
+      // Volume = l × b × h
+      return this.length * this.breadth * this.waterLevel;
     }
+    // Fallback to old calculation
+    return (this.waterLevel / this.height) * this.capacity;
+  }
+  
+  // NEW: Calculate capacity from dimensions
+  calculateMaxCapacity() {
+    if (this.shape === 'cylinder') {
+      const radius = this.diameter / 2;
+      return Math.PI * Math.pow(radius, 2) * this.height * 1000; // Convert m³ to liters
+    } else if (this.shape === 'cuboid') {
+      return this.length * this.breadth * this.height * 1000; // Convert m³ to liters
+    }
+    return this.capacity;
+  }
+
+
+  generateLiveData() {
+    this.pressure = (Math.random()*10+25).toFixed(1);
+    this.flowRate = (Math.random()*30+50).toFixed(1);
+    this.pH = (Math.random()*1+6.5).toFixed(2);
+    this.temperature = (Math.random()*5+20).toFixed(0);
+    this.lastUpdate = Date.now();
+  }
+  
+  setWaterLevel(level) {
+    this.waterLevel = parseFloat(level);
+    this.lastUpdate = Date.now();
+  }
+  
+  update(data) { Object.assign(this, data); }
+  
+  toFirebase() {
+    return {
+      id: this.id, name: this.name, lat: this.lat, lng: this.lng,
+      type: this.type, capacity: this.capacity, waterLevel: this.waterLevel,
+      shape: this.shape, diameter: this.diameter, height: this.height,
+      length: this.length, breadth: this.breadth,
+      state: this.state, district: this.district, mandal: this.mandal,
+      habitation: this.habitation, connectedMainValves: this.connectedMainValves, 
+      status: this.status, pressure: this.pressure,
+      flowRate: this.flowRate, pH: this.pH, temperature: this.temperature,
+      lastUpdate: this.lastUpdate
+    };
+  }
+  
+  info() {
+    return {
+      id: this.id, name: this.name, type: this.type, 
+      shape: this.shape,
+      capacity: `${this.capacity} L`, 
+      currentVolume: `${this.calculateCurrentVolume().toFixed(0)} L`,
+      waterLevel: `${this.waterLevel} m`,
+      pressure: `${this.pressure} PSI`, flowRate: `${this.flowRate} L/min`,
+      pH: this.pH, temperature: `${this.temperature}°C`, status: this.status,
+      loc: {
+        state: this.state, district: this.district, mandal: this.mandal,
+        habitation: this.habitation, coords: `${this.lat.toFixed(6)}, ${this.lng.toFixed(6)}`
+      }
+    };
+  }
+}
 
     class Valve {
   constructor(data) {
@@ -1800,42 +1946,33 @@
   
   if(deviceType === 'tanks') {
     headers = [
-      'Timestamp', 
-      'Date', 
-      'Water Level (m)', 
-      'Volume (L)', 
-      'Outflow Rate (L/min)', 
-      'ETA (Time)', 
-      'ETA (Minutes)',
-      'Total Households', 
-      'Served Households', 
-      'Coverage (%)', 
-      'Pressure (PSI)', 
-      'Flow Rate (L/min)', 
-      'pH', 
-      'Temperature (°C)', 
-      'Status', 
-      'Changes'
+      'Date',
+      'Time',
+      'Volume (L)',
+      'Main Flow Rate (L/min)',
+      'Household Supply (count)',
+      'Pressure (PSI)',
+      'Valve States'
     ];
     
-    rowMapper = (h) => [
-      h.timestamp || '',
-      h.date || new Date(h.timestamp || Date.now()).toLocaleString(),
-      safeNumber(h.waterLevel, 1),
-      safeNumber(h.currentVolume, 0),
-      safeNumber(h.outflowRate, 2),
-      h.etaFormatted || 'N/A',
-      safeNumber(h.etaMinutes, 1),
-      h.totalHouseholds || 0,
-      h.servedHouseholds || 0,
-      safeNumber(h.householdCoverage, 1),
-      safeNumber(h.pressure, 1),
-      safeNumber(h.flowRate, 1),
-      safeNumber(h.pH, 2),
-      safeNumber(h.temperature, 0),
-      h.status || 'unknown',
-      `"${(h.changes || 'No significant changes').replace(/"/g, '""')}"` // Escape quotes
-    ];
+    rowMapper = (h) => {
+      const dateObj = new Date(h.timestamp || Date.now());
+      const dateStr = dateObj.toLocaleDateString('en-IN');
+      const timeStr = dateObj.toLocaleTimeString('en-IN');
+      const valveStatesStr = h.valveStates ? 
+        h.valveStates.map(v => `${v.name}:${v.state}`).join('; ') : 
+        'No data';
+      
+      return [
+        dateStr,
+        timeStr,
+        safeNumber(h.currentVolume, 0),
+        safeNumber(h.mainFlowRate, 2),
+        h.householdSupply || 0,
+        safeNumber(h.pressureChange, 1),
+        `"${valveStatesStr}"`
+      ];
+    };
   } else {
     // Valves
     headers = [
@@ -2174,9 +2311,8 @@ function calculateTankETA(tank) {
   }
 
   // Calculate current water volume in liters
-  const tankHeight = 10; // meters (standard tank height)
-  const currentVolume = (tank.waterLevel / tankHeight) * tank.capacity;
-  
+  // Calculate current water volume using accurate formula
+  const currentVolume = tank.calculateCurrentVolume(); // Uses tank's actual dimensions
   // Calculate TOTAL flow from ALL connected main valves
   let totalCurrentFlow = 0;
   let totalPotentialFlow = 0;
@@ -3038,9 +3174,63 @@ function autoFilterDashboardByDevice(device) {
       document.querySelectorAll('[data-close]').forEach(btn => {
         btn.addEventListener('click', () => closeModal(btn.getAttribute('data-close')));
       });
+ 
       
       // Save buttons
       bindBtn('saveTank', onSaveTank);
+
+
+      
+
+
+     // Tank shape toggle
+const tankShape = document.getElementById('tankShape');
+if(tankShape) {
+  tankShape.addEventListener('change', (e) => {
+    const cylinderDiv = document.getElementById('cylinderDimensions');
+    const cuboidDiv = document.getElementById('cuboidDimensions');
+    const isCylinder = e.target.value === 'cylinder';
+    
+    if(cylinderDiv) cylinderDiv.style.display = isCylinder ? 'block' : 'none';
+    if(cuboidDiv) cuboidDiv.style.display = isCylinder ? 'none' : 'block';
+  });
+}
+
+// Auto-calculate capacity
+bindBtn('calculateCapacity', () => {
+  const shape = val('tankShape');
+  let capacity = 0;
+  
+  if(shape === 'cylinder') {
+    const diameter = parseFloat(val('tankDiameter'));
+    const height = parseFloat(val('tankHeight'));
+    if(!isNaN(diameter) && !isNaN(height)) {
+      const radius = diameter / 2;
+      capacity = Math.PI * Math.pow(radius, 2) * height * 1000; // m³ to liters
+    }
+  } else if(shape === 'cuboid') {
+    const length = parseFloat(val('tankLength'));
+    const breadth = parseFloat(val('tankBreadth'));
+    const height = parseFloat(val('tankHeightCuboid'));
+    if(!isNaN(length) && !isNaN(breadth) && !isNaN(height)) {
+      capacity = length * breadth * height * 1000; // m³ to liters
+    }
+  }
+  
+  if(capacity > 0) {
+    setValue('tankCapacity', Math.round(capacity));
+    toast(`✓ Capacity calculated: ${Math.round(capacity).toLocaleString()} L`);
+  } else {
+    toast('⚠️ Enter valid dimensions');
+  }
+});
+
+
+
+
+
+
+
       bindBtn('saveValve', onSaveValve);
       bindBtn('savePipeline', onSavePipeline);
 
@@ -3126,7 +3316,7 @@ function autoFilterDashboardByDevice(device) {
 
 
 
-    function populateMainValvesList(selectedValves = []) {
+   function populateMainValvesList(selectedValves = []) {
   const container = document.getElementById('mainValvesList');
   const mainValves = valves.filter(v => v.category === 'main');
   
@@ -3140,28 +3330,119 @@ function autoFilterDashboardByDevice(device) {
     return;
   }
   
-  container.innerHTML = mainValves.map(valve => {
-    const isSelected = selectedValves.includes(valve.id);
+  // Currently selected valves display
+  const selectedValvesDisplay = selectedValves.map(valveId => {
+    const valve = mainValves.find(v => v.id === valveId);
+    if(!valve) return '';
     return `
-      <div style="display: flex; align-items: center; padding: 8px; border-bottom: 1px solid #e0e0e0; cursor: pointer; transition: background 0.2s;" 
-           class="valve-checkbox-item"
-           onmouseover="this.style.background='#e3f2fd'" 
-           onmouseout="this.style.background='transparent'">
-        <input type="checkbox" 
-               id="mainValve_${valve.id}" 
-               value="${valve.id}" 
-               ${isSelected ? 'checked' : ''}
-               style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;"/>
-        <label for="mainValve_${valve.id}" style="flex: 1; cursor: pointer; margin: 0;">
-          <div style="font-weight: 600; font-size: 13px;">${valve.name}</div>
-          <div style="font-size: 11px; color: var(--muted);">
-            ${valve.id} • ${valve.households} households • ${valve.mandal}
+      <div style="display: flex; justify-content: space-between; align-items: center; 
+                  padding: 10px; background: #e8f5e9; border: 1px solid #4caf50; 
+                  border-radius: 8px; margin-bottom: 8px;">
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 13px;">${valve.name}</div>
+          <div style="font-size: 11px; color: #666;">
+            ${valve.id} • ${valve.households} HH • ${valve.mandal}
           </div>
-        </label>
+        </div>
+        <button class="btn danger" onclick="removeMainValve('${valveId}')" 
+                style="margin: 0; padding: 6px 12px; font-size: 11px;">
+          <i class="fas fa-times"></i> Remove
+        </button>
       </div>
     `;
   }).join('');
+  
+  // Available valves dropdown (excluding already selected)
+  const availableValves = mainValves.filter(v => !selectedValves.includes(v.id));
+  const dropdownOptions = availableValves.map(v => 
+    `<option value="${v.id}">${v.name} (${v.id}) - ${v.households} HH - ${v.mandal}</option>`
+  ).join('');
+  
+  container.innerHTML = `
+    <div style="margin-bottom: 16px;">
+      <div style="font-weight: 600; font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+        CONNECTED MAIN VALVES (${selectedValves.length})
+      </div>
+      <div id="selectedValvesList">
+        ${selectedValves.length > 0 ? selectedValvesDisplay : '<div style="text-align: center; padding: 20px; color: var(--muted); font-size: 12px;">No valves connected yet</div>'}
+      </div>
+    </div>
+    
+    <div style="border-top: 2px dashed var(--line); padding-top: 16px;">
+      <div style="font-weight: 600; font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+        ADD MAIN VALVE
+      </div>
+      ${availableValves.length > 0 ? `
+        <div style="display: flex; gap: 8px;">
+          <select id="valveToAdd" style="flex: 1; padding: 10px; border: 1px solid var(--line); 
+                                          border-radius: 8px; font-size: 13px;">
+            <option value="">-- Select a valve to add --</option>
+            ${dropdownOptions}
+          </select>
+          <button class="btn success" onclick="addMainValve()" 
+                  style="margin: 0; padding: 10px 16px; white-space: nowrap;">
+            <i class="fas fa-plus"></i> Add
+          </button>
+        </div>
+        
+        <div style="margin-top: 12px;">
+          <input type="text" id="valveSearchInput" 
+                 placeholder="🔍 Search valves by name, ID, or location..." 
+                 style="width: 100%; padding: 10px; border: 1px solid var(--line); 
+                        border-radius: 8px; font-size: 13px;"/>
+        </div>
+      ` : `
+        <div style="text-align: center; padding: 20px; color: var(--success); font-size: 12px;">
+          ✅ All main valves are connected!
+        </div>
+      `}
+    </div>
+  `;
+  
+  // Store selected valves in a global for easy access
+  window.currentSelectedValves = [...selectedValves];
+  
+  // Add search functionality
+  const searchInput = document.getElementById('valveSearchInput');
+  if(searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const dropdown = document.getElementById('valveToAdd');
+      const options = dropdown.querySelectorAll('option');
+      
+      options.forEach((option, idx) => {
+        if(idx === 0) return; // Skip placeholder
+        const text = option.textContent.toLowerCase();
+        option.style.display = text.includes(query) ? 'block' : 'none';
+      });
+    });
+  }
 }
+
+// Global functions for valve management (Place these OUTSIDE of populateMainValvesList)
+window.addMainValve = function() {
+  const dropdown = document.getElementById('valveToAdd');
+  const valveId = dropdown.value;
+  
+  if(!valveId) {
+    toast('⚠️ Please select a valve');
+    return;
+  }
+  
+  if(!window.currentSelectedValves.includes(valveId)) {
+    window.currentSelectedValves.push(valveId);
+    populateMainValvesList(window.currentSelectedValves);
+    toast('✅ Valve added');
+  } else {
+    toast('⚠️ Valve already connected');
+  }
+};
+
+window.removeMainValve = function(valveId) {
+  window.currentSelectedValves = window.currentSelectedValves.filter(id => id !== valveId);
+  populateMainValvesList(window.currentSelectedValves);
+  toast('✅ Valve removed');
+};
 
     function startDataCollection() {
   dataCollectionInterval = setInterval(async () => {
@@ -3226,23 +3507,29 @@ for(const tank of tanks) {
   await FirebaseService.saveTank(tank);
   
   // Save to history with changes, ETA, AND HOUSEHOLD DATA
-  await HistoryService.saveDataPoint(tank.id, 'tanks', {
-    waterLevel: parseFloat(tank.waterLevel),
-    pressure: parseFloat(tank.pressure),
-    flowRate: parseFloat(tank.flowRate),
-    pH: parseFloat(tank.pH),
-    temperature: parseFloat(tank.temperature),
-    status: tank.status,
-    changes: changes.length > 0 ? changes.join('; ') : 'No significant changes',
-    etaMinutes: parseFloat(etaData.currentTimeMinutes) || 0,
-    etaFormatted: etaData.currentTimeFormatted || 'N/A',
-    outflowRate: parseFloat(etaData.currentFlow) || 0,
-    currentVolume: parseFloat(etaData.currentVolume) || 0,
-    // NEW FIELDS:
-    totalHouseholds: tankHouseholds,
-    servedHouseholds: tankServedHouseholds,
-    householdCoverage: tankHouseholds > 0 ? ((tankServedHouseholds / tankHouseholds) * 100).toFixed(1) : 0
+  // Get valve states for this tank
+const connectedValveStates = [];
+if(tank.connectedMainValves && tank.connectedMainValves.length > 0) {
+  tank.connectedMainValves.forEach(valveId => {
+    const valve = valves.find(v => v.id === valveId);
+    if(valve) {
+      connectedValveStates.push({
+        id: valve.id,
+        name: valve.name,
+        state: valve.active ? 'CLOSED' : 'OPEN'
+      });
+    }
   });
+}
+
+await HistoryService.saveDataPoint(tank.id, 'tanks', {
+  // Core metrics only
+  currentVolume: parseFloat(tank.calculateCurrentVolume()) || 0,
+  mainFlowRate: parseFloat(etaData.currentFlow) || 0,
+  householdSupply: tankServedHouseholds,
+  pressureChange: parseFloat(tank.pressure) || 0,
+  valveStates: connectedValveStates // NEW: Track valve states
+});
 }   
     // Track valves with change detection
     // Track valves with change detection
@@ -3346,94 +3633,201 @@ for(const valve of valves) {
     }
 
     function createTooltipContent(device, type) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit'});
+      
       if (type === 'tank') {
         const info = device.info();
+        const currentVolume = device.calculateCurrentVolume().toFixed(0);
+        const maxCapacity = device.calculateMaxCapacity().toFixed(0);
+        const fillPercentage = ((parseFloat(currentVolume) / parseFloat(maxCapacity)) * 100).toFixed(1);
+        
         return `
           <div class="tooltip-title">
-            <i class="fas fa-water"></i> ${device.name}
+            <i class="fas fa-water" style="color: #03a9f4;"></i> 
+            ${device.name}
             <span class="status-indicator ${device.status === 'active' ? 'status-active' : 'status-inactive'}"></span>
+            <span class="live-badge">LIVE</span>
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Type:</span>
-            <span class="tooltip-value">${info.type}</span>
+          
+          <div style="font-size: 10px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">
+            Last updated: ${timeStr}
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Capacity:</span>
-            <span class="tooltip-value">${info.capacity}</span>
+          
+          <div class="tooltip-section">
+            <div class="tooltip-section-title">📊 Storage Status</div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Type:</span>
+              <span class="tooltip-value">${info.type} (${device.shape === 'cylinder' ? 'Cylinder' : 'Cuboid'})</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Current Volume:</span>
+              <span class="tooltip-value" style="color: #03a9f4;">${parseInt(currentVolume).toLocaleString()} L</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Max Capacity:</span>
+              <span class="tooltip-value">${parseInt(maxCapacity).toLocaleString()} L</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Fill Level:</span>
+              <span class="tooltip-value" style="color: ${fillPercentage > 70 ? '#4caf50' : fillPercentage > 30 ? '#ff9800' : '#f44336'};">
+                ${fillPercentage}%
+              </span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Water Level:</span>
+              <span class="tooltip-value">${info.waterLevel}</span>
+            </div>
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Water Level:</span>
-            <span class="tooltip-value">${info.waterLevel}</span>
+          
+          <div class="tooltip-section">
+            <div class="tooltip-section-title">⚡ Live Metrics</div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Pressure:</span>
+              <span class="tooltip-value" style="color: #ff9800;">${info.pressure}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Flow Rate:</span>
+              <span class="tooltip-value" style="color: #2196f3;">${info.flowRate}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">pH Level:</span>
+              <span class="tooltip-value">${info.pH}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Temperature:</span>
+              <span class="tooltip-value">${info.temperature}</span>
+            </div>
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Pressure:</span>
-            <span class="tooltip-value">${info.pressure}</span>
-          </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Flow Rate:</span>
-            <span class="tooltip-value">${info.flowRate}</span>
+          
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: rgba(255,255,255,0.6); text-align: center;">
+            Click for detailed analysis
           </div>
         `;
       } else if (type === 'valve') {
         const info = device.info();
-        const { stats } = calculateHouseholdStats();
         const supplies = calculateSupplyPerHousehold();
         const supplyInfo = supplies.find(s => s.valveId === device.id);
         
         return `
           <div class="tooltip-title">
-            <i class="fas fa-cog"></i> ${device.name}
+            <i class="fas fa-cog" style="color: #6a1b9a;"></i> 
+            ${device.name}
             <span class="status-indicator ${device.active ? 'status-inactive' : 'status-active'}"></span>
+            <span class="live-badge">LIVE</span>
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Type:</span>
-            <span class="tooltip-value">${info.type}</span>
+          
+          <div style="font-size: 10px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">
+            Last updated: ${timeStr}
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Category:</span>
-            <span class="tooltip-value">${info.category.toUpperCase()}</span>
+          
+          <div class="tooltip-section">
+            <div class="tooltip-section-title">ℹ️ Valve Info</div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Type:</span>
+              <span class="tooltip-value">${info.type}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Category:</span>
+              <span class="tooltip-value">${info.category.toUpperCase()}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Status:</span>
+              <span class="tooltip-value" style="color: ${device.active ? '#f44336' : '#4caf50'};">
+                ${info.valveState.toUpperCase()}
+              </span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Location:</span>
+              <span class="tooltip-value">${device.mandal}</span>
+            </div>
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Status:</span>
-            <span class="tooltip-value">${info.valveState.toUpperCase()}</span>
+          
+          <div class="tooltip-section">
+            <div class="tooltip-section-title">🏘️ Household Supply</div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Households:</span>
+              <span class="tooltip-value" style="color: #6a1b9a;">${info.households}</span>
+            </div>
+            ${supplyInfo ? `
+              <div class="tooltip-row">
+                <span class="tooltip-label">Supply Flow:</span>
+                <span class="tooltip-value" style="color: #2196f3;">${supplyInfo.totalFlow.toFixed(1)} L/min</span>
+              </div>
+              <div class="tooltip-row">
+                <span class="tooltip-label">Avg per HH:</span>
+                <span class="tooltip-value" style="color: #4caf50;">${supplyInfo.avgSupply.toFixed(2)} L/min</span>
+              </div>
+            ` : `
+              <div style="text-align: center; padding: 8px; color: rgba(255,255,255,0.5); font-size: 11px;">
+                ${device.active ? '🔴 Valve closed - No supply' : 'No flow data available'}
+              </div>
+            `}
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Households:</span>
-            <span class="tooltip-value">${info.households}</span>
+          
+          <div class="tooltip-section">
+            <div class="tooltip-section-title">📊 Sensors</div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Battery:</span>
+              <span class="tooltip-value" style="color: ${parseInt(info.battery) > 70 ? '#4caf50' : parseInt(info.battery) > 30 ? '#ff9800' : '#f44336'};">
+                ${info.battery}
+              </span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Pressure:</span>
+              <span class="tooltip-value">${info.pressure}</span>
+            </div>
           </div>
-          ${supplyInfo ? `
-          <div class="tooltip-row">
-            <span class="tooltip-label">Supply Flow:</span>
-            <span class="tooltip-value">${supplyInfo.totalFlow.toFixed(0)} L/min</span>
+          
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: rgba(255,255,255,0.6); text-align: center;">
+            Click for control panel
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Avg/HH:</span>
-            <span class="tooltip-value">${supplyInfo.avgSupply.toFixed(1)} L/min</span>
-          </div>
-          ` : ''}
         `;
       } else if (type === 'pipeline') {
         const pipe = device;
+        const flowPercentage = pipe.capacity > 0 ? ((pipe.currentFlow / pipe.capacity) * 100).toFixed(1) : 0;
+        
         return `
           <div class="tooltip-title">
-            <i class="fas fa-pipe"></i> ${pipe.name}
+            <i class="fas fa-pipe" style="color: #1e88e5;"></i> 
+            ${pipe.name}
             <span class="status-indicator ${pipe.currentFlow > 0 ? 'status-active' : 'status-inactive'}"></span>
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Type:</span>
-            <span class="tooltip-value">${pipe.type}</span>
+          
+          <div class="tooltip-section">
+            <div class="tooltip-section-title">🔧 Pipeline Specs</div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Material:</span>
+              <span class="tooltip-value">${pipe.type}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Diameter:</span>
+              <span class="tooltip-value">${pipe.diameter}mm</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Max Capacity:</span>
+              <span class="tooltip-value">${pipe.capacity} L/min</span>
+            </div>
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Diameter:</span>
-            <span class="tooltip-value">${pipe.diameter}mm</span>
+          
+          <div class="tooltip-section">
+            <div class="tooltip-section-title">💧 Current Flow</div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Flow Rate:</span>
+              <span class="tooltip-value" style="color: ${pipe.currentFlow > 0 ? '#4caf50' : '#f44336'};">
+                ${pipe.currentFlow.toFixed(0)} L/min
+              </span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Capacity Usage:</span>
+              <span class="tooltip-value" style="color: ${flowPercentage > 80 ? '#f44336' : flowPercentage > 50 ? '#ff9800' : '#4caf50'};">
+                ${flowPercentage}%
+              </span>
+            </div>
           </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Capacity:</span>
-            <span class="tooltip-value">${pipe.capacity} L/min</span>
-          </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">Current Flow:</span>
-            <span class="tooltip-value">${pipe.currentFlow.toFixed(0)} L/min</span>
+          
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: rgba(255,255,255,0.6); text-align: center;">
+            ${pipe.startPoint && pipe.endPoint ? `${pipe.startPoint} → ${pipe.endPoint}` : 'Click for details'}
           </div>
         `;
       }
@@ -3929,6 +4323,7 @@ for(const valve of valves) {
   const id = val('tankId').trim();
   const name = val('tankName').trim();
   const type = val('tankType');
+  const shape = val('tankShape');
   const capacity = parseFloat(val('tankCapacity'));
   const waterLevel = parseFloat(val('tankWaterLevel'));
   const lat = parseFloat(val('tankLat'));
@@ -3938,36 +4333,60 @@ for(const valve of valves) {
   const mandal = val('tankMandal').trim();
   const habitation = val('tankHabitation').trim();
   
+  // Get dimensions based on shape
+  let diameter, height, length, breadth;
+  if(shape === 'cylinder') {
+    diameter = parseFloat(val('tankDiameter'));
+    height = parseFloat(val('tankHeight'));
+    if(isNaN(diameter) || isNaN(height)) {
+      toast('⚠️ Enter valid cylinder dimensions');
+      return;
+    }
+  } else if(shape === 'cuboid') {
+    length = parseFloat(val('tankLength'));
+    breadth = parseFloat(val('tankBreadth'));
+    height = parseFloat(val('tankHeightCuboid'));
+    if(isNaN(length) || isNaN(breadth) || isNaN(height)) {
+      toast('⚠️ Enter valid cuboid dimensions');
+      return;
+    }
+  }
+  
   // Get selected main valves
-  const selectedValves = Array.from(document.querySelectorAll('#mainValvesList input[type="checkbox"]:checked'))
-    .map(cb => cb.value);
+  // Get selected main valves from global storage
+  const selectedValves = window.currentSelectedValves || [];
 
   const editingId = document.getElementById('tankModal').getAttribute('data-edit-id');
   const idError = validateDeviceId(id, editingId);
-  if(idError) { document.getElementById('tankIdError').textContent = idError; return; }
+  if(idError) { 
+    document.getElementById('tankIdError').textContent = idError; 
+    return; 
+  }
   if(!name || isNaN(lat) || isNaN(lng) || isNaN(capacity) || isNaN(waterLevel)) { 
     toast('⚠️ Fill all required fields'); 
     return; 
   }
 
+  const tankData = {
+    id, name, type, shape, capacity, waterLevel, 
+    diameter, height, length, breadth,
+    state, district, mandal, habitation, lat, lng,
+    connectedMainValves: selectedValves
+  };
+
   if(editingId) {
     const tank = tanks.find(t => t.id === editingId);
     if(tank) {
-      tank.update({
-        id, name, type, capacity, waterLevel, state, district, mandal, habitation, lat, lng,
-        connectedMainValves: selectedValves
-      });
+      tank.update(tankData);
       await FirebaseService.saveTank(tank);
       toast('✓ Tank updated');
     }
   } else {
-    const tank = new Tank({
-      id, name, type, capacity, waterLevel, state, district, mandal, habitation, lat, lng,
-      connectedMainValves: selectedValves
-    });
+    const tank = new Tank(tankData);
     await FirebaseService.saveTank(tank);
     toast('✓ Tank added');
   }
+  
   document.getElementById('tankModal').removeAttribute('data-edit-id');
   document.getElementById('tankIdError').textContent = '';
   closeModal('tankModal');
@@ -4019,22 +4438,41 @@ for(const valve of valves) {
     function editTank(id) {
   const tank = tanks.find(t => t.id === id);
   if(!tank) return;
+  
   setText('tankModalTitle', 'Edit Tank');
   openModal('tankModal');
   document.getElementById('tankModal').setAttribute('data-edit-id', id);
+  
   setValue('tankId', tank.id);
   setValue('tankName', tank.name);
   setValue('tankType', tank.type);
+  setValue('tankShape', tank.shape || (tank.type === 'GSR' ? 'cuboid' : 'cylinder'));
   setValue('tankCapacity', tank.capacity);
   setValue('tankWaterLevel', tank.waterLevel);
+  
+  // Set dimensions
+  if(tank.shape === 'cylinder' || !tank.shape) {
+    setValue('tankDiameter', tank.diameter || 10);
+    setValue('tankHeight', tank.height || 10);
+    document.getElementById('cylinderDimensions').style.display = 'block';
+    document.getElementById('cuboidDimensions').style.display = 'none';
+  } else {
+    setValue('tankLength', tank.length || 10);
+    setValue('tankBreadth', tank.breadth || 10);
+    setValue('tankHeightCuboid', tank.height || 10);
+    document.getElementById('cylinderDimensions').style.display = 'none';
+    document.getElementById('cuboidDimensions').style.display = 'block';
+  }
+  
   setValue('tankState', tank.state);
   setValue('tankDistrict', tank.district);
   setValue('tankMandal', tank.mandal);
   setValue('tankHabitation', tank.habitation);
   setValue('tankLat', tank.lat);
   setValue('tankLng', tank.lng);
+  
   document.getElementById('tankIdError').textContent = '';
-  populateMainValvesList(tank.connectedMainValves || []); // Populate with selected valves
+  populateMainValvesList(tank.connectedMainValves || []);
 }
 
     function editValve(id) {
@@ -4342,29 +4780,47 @@ for(const valve of valves) {
     }
 
     async function loadHistory() {
-      const startDate = document.getElementById('historyStartDate').value;
-      const endDate = document.getElementById('historyEndDate').value;
-      
-      const historyContent = document.getElementById('historyContent');
-      historyContent.innerHTML = `
-        <div style="text-align: center; padding: 40px; color: var(--muted);">
-          <i class="fas fa-spinner fa-spin" style="font-size: 32px;"></i>
-          <div style="margin-top: 12px;">Loading history...</div>
-        </div>
-      `;
-      
-      currentHistoryData = await HistoryService.getHistory(
-        currentHistoryDevice, 
-        currentHistoryType,
-        startDate,
-        endDate
-      );
-      
-      renderHistory(currentHistoryData);
-    }
+  const startDate = document.getElementById('historyStartDate').value;
+  const endDate = document.getElementById('historyEndDate').value;
+  const timeRange = document.getElementById('historyTimeRange').value;
+  
+  const historyContent = document.getElementById('historyContent');
+  historyContent.innerHTML = `
+    <div style="text-align: center; padding: 40px; color: var(--muted);">
+      <i class="fas fa-spinner fa-spin" style="font-size: 32px;"></i>
+      <div style="margin-top: 12px;">Loading history...</div>
+    </div>
+  `;
+  
+  currentHistoryData = await HistoryService.getHistory(
+    currentHistoryDevice, 
+    currentHistoryType,
+    startDate,
+    endDate
+  );
+  
+  // Apply time range filter if selected
+  if(timeRange) {
+    const [startHour, endHour] = timeRange.split('-').map(Number);
+    currentHistoryData = currentHistoryData.filter(h => {
+      const hour = new Date(h.timestamp).getHours();
+      return hour >= startHour && hour < endHour;
+    });
+  }
+  
+  renderHistory(currentHistoryData);
+}
 
     function renderHistory(history) {
   const historyContent = document.getElementById('historyContent');
+  
+  // Helper function for safe number formatting
+  const safeNumber = (value, decimals = 0) => {
+    if (value === undefined || value === null || isNaN(value) || !isFinite(value)) {
+      return '-';
+    }
+    return Number(value).toFixed(decimals);
+  };
   
   if(history.length === 0) {
     historyContent.innerHTML = `
@@ -4376,6 +4832,7 @@ for(const valve of valves) {
     return;
   }
   
+  
   let tableHTML = ''; // IMPORTANT: Initialize variable
   
   if(currentHistoryType === 'tanks') {
@@ -4383,36 +4840,51 @@ for(const valve of valves) {
       <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
         <thead>
           <tr style="background: #fafbfc; border-bottom: 2px solid var(--line);">
-            <th style="padding: 12px; text-align: left; font-weight: 700;">Date & Time</th>
-            <th style="padding: 12px; text-align: center;">Water Level</th>
-            <th style="padding: 12px; text-align: center;">Volume</th>
-            <th style="padding: 12px; text-align: center;">Outflow Rate</th>
-            <th style="padding: 12px; text-align: center;">ETA</th>
+            <th style="padding: 12px; text-align: left; font-weight: 700;">Date</th>
+            <th style="padding: 12px; text-align: left; font-weight: 700;">Time</th>
+            <th style="padding: 12px; text-align: center;">Volume (L)</th>
+            <th style="padding: 12px; text-align: center;">Main Flow (L/min)</th>
             <th style="padding: 12px; text-align: center;">Households</th>
-            <th style="padding: 12px; text-align: left; min-width: 200px;">Changes</th>
+            <th style="padding: 12px; text-align: center;">Pressure (PSI)</th>
+            <th style="padding: 12px; text-align: left;">Valve States</th>
           </tr>
         </thead>
         <tbody>
-          ${history.map((h, idx) => `
-            <tr style="border-bottom: 1px solid #f2f4f7; ${idx % 2 === 0 ? 'background: #fafbfc;' : ''}">
-              <td style="padding: 10px; white-space: nowrap;">${new Date(h.timestamp).toLocaleString()}</td>
-              <td style="padding: 10px; text-align: center; font-weight: 600;">${h.waterLevel || '-'} m</td>
-              <td style="padding: 10px; text-align: center;">${h.currentVolume || '-'} L</td>
-              <td style="padding: 10px; text-align: center; font-weight: 600; color: ${(h.outflowRate || 0) > 100 ? '#f44336' : '#4caf50'};">${h.outflowRate ? h.outflowRate.toFixed(1) : '-'} L/min</td>
-              <td style="padding: 10px; text-align: center; font-weight: 600; color: ${(h.etaMinutes || 0) < 60 ? '#f44336' : (h.etaMinutes || 0) < 240 ? '#ff9800' : '#4caf50'};">
-                ${h.etaFormatted || '-'}
-              </td>
-              <td style="padding: 10px; text-align: center;">
-                <div style="font-weight: 700; color: #6a1b9a;">${h.servedHouseholds || 0}/${h.totalHouseholds || 0}</div>
-                <div style="font-size: 10px; color: ${(h.householdCoverage || 0) > 80 ? '#4caf50' : '#ff9800'};">
-                  ${h.householdCoverage || 0}% coverage
+          ${history.map((h, idx) => {
+            const dateObj = new Date(h.timestamp);
+            const dateStr = dateObj.toLocaleDateString('en-IN');
+            const timeStr = dateObj.toLocaleTimeString('en-IN');
+            const valveStatesHTML = h.valveStates ? 
+              h.valveStates.map(v => `
+                <div style="font-size: 10px; padding: 2px 0;">
+                  <span style="color: ${v.state === 'OPEN' ? '#4caf50' : '#f44336'}; font-weight: 700;">
+                    ${v.state === 'OPEN' ? '●' : '●'}
+                  </span>
+                  ${v.name}
                 </div>
+              `).join('') : 
+              '<span style="color: #999;">No data</span>';
+            
+            return `
+            <tr style="border-bottom: 1px solid #f2f4f7; ${idx % 2 === 0 ? 'background: #fafbfc;' : ''}">
+              <td style="padding: 10px; white-space: nowrap; font-weight: 600;">${dateStr}</td>
+              <td style="padding: 10px; white-space: nowrap;">${timeStr}</td>
+              <td style="padding: 10px; text-align: center; font-weight: 600;">${safeNumber(h.currentVolume, 0)} L</td>
+              <td style="padding: 10px; text-align: center; font-weight: 600; color: ${(h.mainFlowRate || 0) > 100 ? '#f44336' : '#4caf50'};">
+                ${safeNumber(h.mainFlowRate, 2)}
               </td>
-              <td style="padding: 10px; font-size: 11px; color: #666;">
-                ${h.changes || 'No changes recorded'}
+              <td style="padding: 10px; text-align: center; font-weight: 700; color: #6a1b9a;">
+                ${h.householdSupply || 0}
+              </td>
+              <td style="padding: 10px; text-align: center; font-weight: 600;">
+                ${safeNumber(h.pressureChange, 1)}
+              </td>
+              <td style="padding: 10px;">
+                ${valveStatesHTML}
               </td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     `;
@@ -4525,12 +4997,11 @@ async function debugHistory() {
               <i class="fas fa-water"></i> WATER LEVEL CONTROL
             </h4>
             <div class="water-tank-visual">
-              <div class="water-fill" id="waterFill" style="height:${(device.waterLevel / 10) * 100}%">
-                ${device.waterLevel} m
+<div class="water-fill" id="waterFill" style="height:${(device.waterLevel / device.height) * 100}%">                ${device.waterLevel} m
               </div>
             </div>
-            <input type="range" class="water-level-slider" id="waterLevelSlider" 
-                   min="0" max="10" step="0.1" value="${device.waterLevel}"/>
+           <input type="range" class="water-level-slider" id="waterLevelSlider" 
+                   min="0" max="${device.height}" step="0.1" value="${device.waterLevel}"/>
             <div style="text-align:center;margin-top:8px;font-size:13px;color:#0277bd;font-weight:600">
               Adjust water level: <span id="waterLevelDisplay">${device.waterLevel} m</span>
             </div>
@@ -4555,7 +5026,7 @@ async function debugHistory() {
   <h4 style="color: ${(() => {
     const etaData = calculateTankETA(device);
     return etaData.statusColor || '#4caf50';
-  })()};"><i class="fas fa-clock"></i> DETAILED ETA ANALYSIS</h4>
+  })()};"><i class="fas fa-clock"></i> WATER DEPLETION FORECAST</h4>
   ${(() => {
     const etaData = calculateTankETA(device);
     
@@ -4580,24 +5051,38 @@ async function debugHistory() {
             etaData.status === 'no_flow' ? '⏸️ NO FLOW' : '✅ GOOD'}
         </span>
       </div>
-      
       <div class="row">
-        <span class="label">Current Volume</span>
-        <span class="value">${etaData.currentVolume} L</span>
+        <span class="label">Current Volume:</span>
+        <span class="tooltip-value" style="color: #03a9f4; font-size: 16px;">
+          ${parseInt(etaData.currentVolume).toLocaleString()} L
+        </span>
+      </div>
+      <div class="row">
+        <span class="label">Max Capacity:</span>
+        <span class="tooltip-value">
+          ${parseInt(device.calculateMaxCapacity()).toLocaleString()} L
+        </span>
+      </div>
+      <div class="row">
+        <span class="label">Fill Percentage:</span>
+        <span class="tooltip-value" style="color: ${((etaData.currentVolume / device.calculateMaxCapacity()) * 100) > 70 ? '#4caf50' : '#ff9800'};">
+          ${((etaData.currentVolume / device.calculateMaxCapacity()) * 100).toFixed(1)}%
+        </span>
       </div>
       
+      
       <div class="row">
-        <span class="label">Connected Main Valves</span>
-        <span class="value">${etaData.openMainValves}/${etaData.connectedMainValves} Open</span>
+        <span class="label">Water Level</span>
+        <span class="value">${device.waterLevel} m</span>
       </div>
       
       <div style="background: rgba(255,255,255,0.3); padding: 12px; border-radius: 8px; margin: 12px 0;">
         <div style="font-weight: 700; margin-bottom: 10px; font-size: 12px;">
-          <i class="fas fa-tint"></i> CURRENT FLOW (Active Valves)
+          <i class="fas fa-tint"></i> MAIN WATER OUTFLOW
         </div>
         <div class="row" style="margin: 4px 0;">
           <span class="label">Flow Rate</span>
-          <span class="value" style="color: ${etaData.currentFlow > 0 ? '#4caf50' : '#999'}; font-weight: 700;">
+          <span class="value" style="color: ${etaData.currentFlow > 0 ? '#4caf50' : '#999'}; font-weight: 700; font-size: 18px;">
             ${etaData.currentFlow.toFixed(1)} L/min
           </span>
         </div>
@@ -4617,72 +5102,11 @@ async function debugHistory() {
         ` : ''}
       </div>
       
-      ${etaData.potentialFlow > etaData.currentFlow ? `
-      <div style="background: rgba(255,255,255,0.3); padding: 12px; border-radius: 8px; margin: 12px 0;">
-        <div style="font-weight: 700; margin-bottom: 10px; font-size: 12px;">
-          <i class="fas fa-bolt"></i> IF ALL VALVES OPEN
-        </div>
-        <div class="row" style="margin: 4px 0;">
-          <span class="label">Potential Flow</span>
-          <span class="value" style="color: #ff9800; font-weight: 700;">
-            ${etaData.potentialFlow.toFixed(1)} L/min
-          </span>
-        </div>
-        <div class="row" style="margin: 4px 0;">
-          <span class="label">Time to Empty</span>
-          <span class="value" style="font-size: 16px; font-weight: 700; color: #ff9800;">
-            ${etaData.potentialTimeFormatted}
-          </span>
-        </div>
-        <div class="row" style="margin: 4px 0;">
-          <span class="label">Would Empty By</span>
-          <span class="value" style="font-weight: 700; font-size: 11px;">
-            ${etaData.potentialETAFormatted}
-          </span>
-        </div>
-      </div>
-      ` : ''}
-      
-      <div style="background: rgba(255,255,255,0.3); padding: 12px; border-radius: 8px; margin: 12px 0;">
-        <div style="font-weight: 700; margin-bottom: 10px; font-size: 12px;">
-          <i class="fas fa-list"></i> VALVE BREAKDOWN
-        </div>
-        ${etaData.valveDetails.map(v => `
-          <div style="background: ${v.isOpen ? 'rgba(76,175,80,0.1)' : 'rgba(244,67,54,0.1)'}; 
-                      border-left: 3px solid ${v.isOpen ? '#4caf50' : '#f44336'}; 
-                      padding: 8px; 
-                      margin: 6px 0; 
-                      border-radius: 4px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div style="flex: 1;">
-                <div style="font-weight: 600; font-size: 12px; color: #333;">
-                  ${v.name}
-                  <span style="background: ${v.isOpen ? '#4caf50' : '#f44336'}; 
-                               color: white; 
-                               padding: 2px 6px; 
-                               border-radius: 4px; 
-                               font-size: 10px; 
-                               margin-left: 6px;">
-                    ${v.isOpen ? 'OPEN' : 'CLOSED'}
-                  </span>
-                </div>
-                <div style="font-size: 10px; color: #666; margin-top: 2px;">
-                  ${v.households} households • ${v.openSubValves}/${v.totalSubValves} sub-valves open
-                </div>
-              </div>
-              <div style="text-align: right;">
-                <div style="font-weight: 700; font-size: 13px; color: ${v.isOpen ? '#4caf50' : '#999'};">
-                  ${v.actualFlow.toFixed(0)} L/min
-                </div>
-                ${!v.isOpen && v.potentialFlow > 0 ? `
-                <div style="font-size: 10px; color: #ff9800;">
-                  Could be: ${v.potentialFlow.toFixed(0)} L/min
-                </div>
-                ` : ''}
-              </div>
-            </div>
-          </div>
-        `).join('')}
+      <div class="row" style="background: rgba(255,255,255,0.3); padding: 10px; border-radius: 8px;">
+        <span class="label">Households Supplied</span>
+        <span class="value" style="color: #6a1b9a; font-weight: 700;">
+          ${etaData.totalHouseholdsServed} HH
+        </span>
       </div>
       
       ${etaData.status === 'critical' ? `
@@ -4706,14 +5130,137 @@ async function debugHistory() {
             <div class="row"><span class="label">Coordinates</span><span class="value">${info.loc.coords}</span></div>
             <button class="btn primary" onclick="map.setView([${device.lat},${device.lng}],18)"><i class="fas fa-crosshairs"></i> Center on Map</button>
           </div>
+          
 
+
+          <div class="card">
+            <h4><i class="fas fa-valve"></i> CONNECTED MAIN VALVES CONTROL</h4>
+            ${(() => {
+              if (!device.connectedMainValves || device.connectedMainValves.length === 0) {
+                return `
+                  <div style="text-align: center; padding: 20px; color: var(--muted);">
+                    <i class="fas fa-unlink" style="font-size: 24px; margin-bottom: 8px;"></i>
+                    <div style="font-size: 13px;">No main valves connected</div>
+                    <button class="btn primary" onclick="editTank('${device.id}')" style="margin-top: 12px;">
+                      <i class="fas fa-link"></i> Connect Main Valves
+                    </button>
+                  </div>
+                `;
+              }
+              
+              const connectedValves = valves.filter(v => 
+                device.connectedMainValves.includes(v.id) && v.category === 'main'
+              );
+              
+              if (connectedValves.length === 0) {
+                return `
+                  <div style="text-align: center; padding: 20px; color: var(--muted);">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 8px;"></i>
+                    <div style="font-size: 13px;">Connected valves not found in system</div>
+                  </div>
+                `;
+              }
+              
+              let totalOutflow = 0;
+              const valveControls = connectedValves.map(valve => {
+                const subValves = valves.filter(v => v.category === 'sub' && v.parentValveId === valve.id);
+                let valveOutflow = 0;
+                
+                if (!valve.active) {
+                  valveOutflow = valve.flowRate || 0;
+                  subValves.forEach(sv => {
+                    if (!sv.active) valveOutflow += (sv.flowRate || 0);
+                  });
+                }
+                
+                totalOutflow += valveOutflow;
+                
+                return `
+                  <div style="background: ${valve.active ? '#ffebee' : '#e8f5e9'}; 
+                              border: 2px solid ${valve.active ? '#f44336' : '#4caf50'}; 
+                              border-radius: 10px; 
+                              padding: 14px; 
+                              margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                      <div style="flex: 1;">
+                        <div style="font-weight: 700; font-size: 14px; color: #333;">
+                          <i class="fas fa-cog"></i> ${valve.name}
+                        </div>
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                          ${valve.households} households • ${valve.mandal}
+                        </div>
+                      </div>
+                      <div style="text-align: right;">
+                        <div style="font-size: 18px; font-weight: 700; color: ${valve.active ? '#f44336' : '#4caf50'};">
+                          ${valveOutflow.toFixed(1)} L/min
+                        </div>
+                        <div style="font-size: 10px; color: ${valve.active ? '#f44336' : '#4caf50'}; font-weight: 600;">
+                          ${valve.active ? '🔴 CLOSED' : '✅ OPEN'}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    ${subValves.length > 0 ? `
+                      <div style="background: rgba(255,255,255,0.5); border-radius: 6px; padding: 8px; margin-bottom: 10px;">
+                        <div style="font-size: 11px; font-weight: 600; color: #666; margin-bottom: 6px;">
+                          Sub-Valves (${subValves.filter(sv => !sv.active).length}/${subValves.length} open)
+                        </div>
+                        ${subValves.map(sv => `
+                          <div style="font-size: 10px; color: #666; padding: 2px 0;">
+                            <span style="color: ${sv.active ? '#f44336' : '#4caf50'};">
+                              ${sv.active ? '●' : '○'}
+                            </span>
+                            ${sv.name} (${sv.households} HH, ${sv.flowRate || 0} L/min)
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : ''}
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                      <button class="btn success" 
+                              onclick="setValveFlow('${valve.id}', false)" 
+                              ${!valve.active ? 'disabled' : ''}
+                              style="margin: 0; padding: 8px; font-size: 12px;">
+                        <i class="fas fa-check"></i> Open
+                      </button>
+                      <button class="btn danger" 
+                              onclick="setValveFlow('${valve.id}', true)" 
+                              ${valve.active ? 'disabled' : ''}
+                              style="margin: 0; padding: 8px; font-size: 12px;">
+                        <i class="fas fa-ban"></i> Close
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('');
+              
+              return `
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            color: white; 
+                            border-radius: 10px; 
+                            padding: 14px; 
+                            margin-bottom: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                      <div style="font-size: 12px; opacity: 0.9;">MAIN WATER OUTFLOW</div>
+                      <div style="font-size: 28px; font-weight: 700;">${totalOutflow.toFixed(1)} <span style="font-size: 14px;">L/min</span></div>
+                    </div>
+                    <div style="text-align: right;">
+                      <div style="font-size: 12px; opacity: 0.9;">Active Valves</div>
+                      <div style="font-size: 24px; font-weight: 700;">${connectedValves.filter(v => !v.active).length}/${connectedValves.length}</div>
+                    </div>
+                  </div>
+                </div>
+                ${valveControls}
+              `;
+            })()}
+          </div>
 
           <div class="card">
             <h4><i class="fas fa-tools"></i> ACTIONS</h4>
             <button class="btn" onclick="editTank('${device.id}')"><i class="fas fa-pen"></i> Edit Tank</button>
             <button class="btn danger" onclick="deleteTank('${device.id}')"><i class="fas fa-trash"></i> Delete</button>
           </div>
-
 
 
           <div class="card">
@@ -4722,19 +5269,13 @@ async function debugHistory() {
               <i class="fas fa-history"></i> View History
             </button>
           </div>
-
-          <div class="card">
-            <h4><i class="fas fa-tools"></i> ACTIONS</h4>
-            <button class="btn" onclick="editTank('${device.id}')"><i class="fas fa-pen"></i> Edit Tank</button>
-            <button class="btn danger" onclick="deleteTank('${device.id}')"><i class="fas fa-trash"></i> Delete</button>
-          </div>
         `;
         const slider = document.getElementById('waterLevelSlider');
         const fill = document.getElementById('waterFill');
         const display = document.getElementById('waterLevelDisplay');
-        slider.addEventListener('input', async (e) => {
+       slider.addEventListener('input', async (e) => {
           const level = parseFloat(e.target.value);
-          fill.style.height = `${(level / 10) * 100}%`;
+          fill.style.height = `${(level / device.height) * 100}%`; 
           fill.textContent = `${level} m`;
           display.textContent = `${level} m`;
           device.setWaterLevel(level);
@@ -4945,18 +5486,37 @@ function closeSidebar() {
   document.getElementById('supplyDashboard').classList.remove('shifted');
 }
     async function setValveFlow(id, shouldBlock) {
-      const valve = valves.find(v => v.id === id);
-      if(!valve) return;
-      valve.active = shouldBlock;
-      valve.valveState = shouldBlock ? 'closed' : 'open';
-      await FirebaseService.saveValve(valve);
-      flowCacheDirty = true;
-      requestDrawCanvas();
-      updateSupplyDashboard();
-      if(shouldBlock) toast(`🔴 Valve closed - ${valve.households} households affected`);
-      else toast(`✓ Valve opened - ${valve.households} households restored`);
-      showDevice(valve, 'valve');
+  const valve = valves.find(v => v.id === id);
+  if(!valve) return;
+  
+  valve.active = shouldBlock;
+  valve.valveState = shouldBlock ? 'closed' : 'open';
+  await FirebaseService.saveValve(valve);
+  
+  flowCacheDirty = true;
+  requestDrawCanvas();
+  updateSupplyDashboard();
+  
+  if(shouldBlock) {
+    toast(`🔴 Valve closed - ${valve.households} households affected`);
+  } else {
+    toast(`✅ Valve opened - ${valve.households} households restored`);
+  }
+  
+  // Check if tank sidebar is open and refresh it
+  const sidebar = document.getElementById('sidebar');
+  if(sidebar.classList.contains('open')) {
+    const sidebarTitle = document.getElementById('sidebarTitle').textContent;
+    if(sidebarTitle.includes('🏗️')) {
+      // Tank sidebar is open, find which tank and refresh
+      tanks.forEach(tank => {
+        if(tank.connectedMainValves && tank.connectedMainValves.includes(valve.id)) {
+          showDevice(tank, 'tank');
+        }
+      });
     }
+  }
+}
 
     function findAffectedPipelines(valve) {
       const affected = [];
